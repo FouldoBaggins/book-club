@@ -254,7 +254,7 @@ const SUPABASE_KEY = "sb_publishable_-aOfFMyT_bBZqGWjUJPSTQ_fFeZRTdg";
 const GOOGLE_BOOKS_KEY = "";  // optional: add a free Google Books API key if searches start failing
 const REFRESH_SECONDS = 60;  // how often to re-check for friends' changes while the page is open
 
-const GENRES = ["Fiction","Literary fiction","Crime / Thriller","Mystery","Fantasy","Sci-fi","Romance","Historical fiction","Horror","Classic","Young adult","Non-fiction","Biography / Memoir","Self-help","Poetry","Humour"];
+const GENRES = ["Fiction","Literary fiction","Crime","Thriller","Mystery","Fantasy","Sci-fi","Romance","Historical fiction","Horror","Classic","Young adult","Non-fiction","Biography / Memoir","Poetry","Humour"];
 
 /* =====================================================================
    STATE
@@ -557,10 +557,10 @@ async function searchOpenLibrary(q){
 // Database subjects are messy — map them to up to 3 tidy genres (you can change them before saving).
 function guessGenres(subjects){
   const s = subjects.join(" | ").toLowerCase();
-  const rules = [["Fantasy",/fantasy|magic|dragons/],["Sci-fi",/science fiction|dystopia/],["Crime / Thriller",/thriller|suspense|crime|detective/],
+  const rules = [["Fantasy",/fantasy|magic|dragons/],["Sci-fi",/science fiction|dystopia/],["Crime",/crime|detective|police/],["Thriller",/thriller|suspense/],
     ["Mystery",/mystery/],["Horror",/horror|ghost|vampire/],["Romance",/romance|love stories/],["Historical fiction",/historical fiction/],
     ["Young adult",/young adult|juvenile fiction/],["Humour",/humor|humour|comedy/],["Classic",/classic/],["Poetry",/poetry/],
-    ["Biography / Memoir",/biography|memoir|autobiography/],["Self-help",/self-help|personal development/]];
+    ["Biography / Memoir",/biography|memoir|autobiography/]];
   const hits = rules.filter(([, re]) => re.test(s)).map(([g]) => g).slice(0, 3);
   if (!hits.length && /fiction/.test(s)) hits.push("Fiction");
   if (!hits.length && /history|science|politics|economics|psychology|nonfiction|non-fiction/.test(s)) hits.push("Non-fiction");
