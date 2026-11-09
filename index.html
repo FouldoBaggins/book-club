@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ---------- Theme ---------- */
+:root{
+  --paper:#f6f1e7; --card:#fffdf8; --ink:#2a2420; --muted:#7a6f66; --line:#e6dccb;
+  --accent:#b5532f; --accent-soft:#f3dfd3; --green:#2f6b4f; --green-soft:#dcebe2;
+  --star:#e2a227; --shadow:0 1px 2px rgba(60,40,20,.06),0 4px 14px rgba(60,40,20,.07); --r:16px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--paper:#1c1916;--card:#26221e;--ink:#f1ebe2;--muted:#a99d91;--line:#3a342e;
+  --accent:#e07a52;--accent-soft:#4a2e22;--green:#6fbf95;--green-soft:#22382d;--shadow:0 2px 10px rgba(0,0,0,.35)}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;margin:0;line-height:1.15}
+.hidden{display:none!important}
+.wrap{max-width:920px;margin:0 auto;padding:16px 16px 110px}
+header{display:flex;align-items:center;gap:10px;margin:4px 0 14px}
+header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.icon-btn{border:0;background:transparent;padding:6px;border-radius:10px;cursor:pointer;color:var(--muted)}
+.icon-btn:hover{background:var(--line)}
+.status{background:var(--accent-soft);padding:10px 14px;border-radius:12px;margin-bottom:12px;font-size:14px}
+
+/* ---------- Passcode screen ---------- */
+.gate{min-height:100vh;display:grid;place-items:center;padding:20px}
+.gate-card{background:var(--card);border-radius:22px;padding:28px 22px;box-shadow:var(--shadow);width:100%;max-width:360px;text-align:center}
+.gate-card h1{font-size:26px;margin:8px 0 6px}
+.gate-card p{color:var(--muted);margin:0 0 16px}
+.err{color:#b3261e;font-size:13px;min-height:18px;margin-top:6px}
+
+/* ---------- Top cards ---------- */
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+@media (max-width:520px){.hero{grid-template-columns:1fr}}
+.hero-card{background:var(--card);border-radius:var(--r);padding:14px;box-shadow:var(--shadow);display:flex;gap:12px;align-items:center;min-height:86px}
+.hero-card .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.hero-card .big{font-family:Fraunces,serif;font-size:20px;font-weight:700}
+.hero-card .sub{font-size:13px;color:var(--muted)}
+.hero-card.turn{background:linear-gradient(135deg,var(--green-soft),var(--card))}
+.hero-card.meet{background:linear-gradient(135deg,var(--accent-soft),var(--card));cursor:pointer}
+.hero-ico{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:22px;flex:none;background:var(--card)}
+.mini-btns{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.chip-btn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer}
+
+/* ---------- Tabs, stats, filters ---------- */
+.tabs{display:flex;gap:6px;background:var(--line);padding:4px;border-radius:999px;margin-bottom:14px}
+.tabs button{flex:1;border:0;background:transparent;padding:8px;border-radius:999px;font-weight:600;cursor:pointer;color:var(--muted)}
+.tabs button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+@media (max-width:620px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--card);border-radius:14px;padding:10px 12px;box-shadow:var(--shadow);min-width:0}
+.stat .n{font-family:Fraunces,serif;font-size:22px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .t{font-size:12px;color:var(--muted)}
+.search{width:100%;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:9px 12px;margin-bottom:10px}
+.genres{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;scrollbar-width:none}
+.genres button{white-space:nowrap;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.genres button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+/* ---------- Book grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.book{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;border:0;padding:0;text-align:left;display:flex;flex-direction:column}
+.book:active{transform:scale(.98)}
+.cover{aspect-ratio:2/3;width:100%;object-fit:cover;display:block;background:var(--line)}
+.gen-cover{aspect-ratio:2/3;width:100%;display:flex;flex-direction:column;justify-content:space-between;padding:14px;color:#fff;font-family:Fraunces,serif}
+.gen-cover .gt{font-size:18px;font-weight:700;line-height:1.15;overflow-wrap:anywhere}
+.gen-cover .ga{font-size:12px;opacity:.9;font-family:Inter,sans-serif}
+.cover-wrap{position:relative}
+.upcoming-tag{position:absolute;top:8px;left:8px;background:var(--accent);color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}
+.book .meta{padding:10px 11px 12px;display:flex;flex-direction:column;gap:3px}
+.book .title{font-weight:600;line-height:1.25}
+.book .author{font-size:13px;color:var(--muted)}
+.book .row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:4px}
+.stars{position:relative;display:inline-block;font-size:15px;letter-spacing:1px;line-height:1}
+.stars .bg{color:var(--line)} .stars .fg{position:absolute;left:0;top:0;overflow:hidden;white-space:nowrap;color:var(--star)}
+.stars.lg{font-size:26px}
+.small{font-size:12px;color:var(--muted)}
+.av{display:inline-grid;place-items:center;border-radius:50%;color:#fff;font-weight:600;flex:none}
+.empty{text-align:center;padding:36px 16px;color:var(--muted)} .empty .e-ico{font-size:44px;margin-bottom:6px}
+
+/* ---------- Members ---------- */
+.members{display:flex;flex-direction:column;gap:10px}
+.member{background:var(--card);border-radius:var(--r);padding:12px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px}
+.member .info{flex:1;min-width:0} .member .name{font-weight:600}
+.member .bars{display:flex;gap:12px;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:2px}
+.add-row{display:flex;gap:8px;margin-top:12px}
+.turn-badge{background:var(--green);color:#fff;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:6px;font-weight:600}
+
+/* ---------- Buttons & forms ---------- */
+.fab{position:fixed;right:18px;bottom:22px;background:var(--accent);color:#fff;border:0;border-radius:999px;padding:14px 20px;font-weight:600;font-size:15px;box-shadow:0 6px 20px rgba(181,83,47,.4);cursor:pointer;z-index:5}
+.btn{border:0;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:600;cursor:pointer}
+.btn.alt{background:var(--line);color:var(--ink)} .btn.danger{background:#b3261e;color:#fff} .btn.green{background:var(--green);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.field input,.field select,.field textarea,.input{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:10px 12px;width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- Book search (autofill) ---------- */
+.lookup{background:var(--green-soft);border-radius:14px;padding:12px;margin-bottom:14px}
+.lookup-row{display:flex;gap:8px}
+.results{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:320px;overflow-y:auto}
+.result{display:flex;gap:10px;align-items:center;background:var(--card);border:0;border-radius:10px;padding:6px;text-align:left;cursor:pointer}
+.result img,.result .noimg{width:40px;height:60px;object-fit:cover;border-radius:4px;background:var(--line);flex:none}
+.result .rt{font-weight:600;line-height:1.2} .result .ra{font-size:12px;color:var(--muted)}
+
+/* ---------- Sheets / modals ---------- */
+.overlay{position:fixed;inset:0;background:rgba(20,14,10,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+@media (min-width:700px){.overlay{align-items:center}}
+.sheet{background:var(--card);width:100%;max-width:640px;max-height:92vh;overflow-y:auto;border-radius:22px 22px 0 0;padding:18px 18px 28px;animation:up .2s ease-out}
+@media (min-width:700px){.sheet{border-radius:22px}}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+.sheet-head{display:flex;align-items:center;gap:8px;margin-bottom:12px} .sheet-head h2{flex:1;font-size:21px}
+.detail-top{display:flex;gap:14px;margin-bottom:14px}
+.detail-top .cv{width:110px;flex:none;border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+.detail-top h2{font-size:22px;margin-bottom:2px}
+.tag{display:inline-block;background:var(--green-soft);color:var(--green);font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}
+.facts{display:grid;gap:6px;font-size:14px;margin-top:8px} .facts div{display:flex;gap:8px;align-items:center}
+.score-box{display:flex;align-items:center;gap:14px;background:var(--paper);border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.score-box .avg{font-family:Fraunces,serif;font-size:38px;font-weight:700;line-height:1}
+.rec-bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:6px} .rec-bar span{display:block;height:100%;background:var(--green)}
+.section{margin-top:18px} .section h3{font-size:17px;margin-bottom:8px}
+.rlist{display:flex;flex-direction:column;gap:6px}
+.ritem{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--paper);border-radius:12px} .ritem .nm{flex:1;font-weight:500}
+.quote{background:var(--paper);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:10px 12px;margin-bottom:8px;position:relative}
+.quote p{margin:0 0 6px;font-family:Fraunces,serif;font-size:16px;white-space:pre-wrap} .quote .del{position:absolute;top:4px;right:4px}
+.panel{background:var(--paper);border-radius:14px;padding:12px;margin-top:10px}
+.slider-row{display:flex;align-items:center;gap:12px;margin:6px 0 10px}
+.slider-row input{flex:1;accent-color:var(--star)}
+.slider-row .val{font-family:Fraunces,serif;font-size:24px;font-weight:700;width:42px;text-align:right}
+.toggle{display:flex;gap:6px;margin-bottom:10px}
+.toggle button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px;cursor:pointer;font-weight:500}
+.toggle button.on.yes{background:var(--green);color:#fff;border-color:var(--green)}
+.toggle button.on.no{background:#8a3b2c;color:#fff;border-color:#8a3b2c}
+.cover-pick{display:flex;gap:12px;align-items:center}
+.cover-pick .pv{width:70px;border-radius:8px;overflow:hidden;flex:none;background:var(--line)}
+.file-lbl{display:inline-block;border:1px dashed var(--muted);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:500}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90vw}
+</style>
+</head>
+<body>
+
+<!-- ======== Passcode screen ======== -->
+<div id="gate" class="gate hidden">
+  <form class="gate-card" id="gateForm">
+    <div style="font-size:44px">📚</div>
+    <h1>Book Club</h1>
+    <p>Enter the club passcode</p>
+    <input class="input" id="gateCode" autocomplete="off" autocapitalize="none" placeholder="Passcode" style="text-align:center">
+    <div class="err" id="gateErr"></div>
+    <button class="btn" style="width:100%;margin-top:6px">Open</button>
+  </form>
+</div>
+
+<!-- ======== Main app ======== -->
+<div id="app" class="hidden">
+<div class="wrap">
+  <header>
+    <span style="font-size:28px">📚</span>
+    <h1 id="clubName">Book Club</h1>
+    <button class="icon-btn" id="renameClub" aria-label="Rename club">✏️</button>
+    <button class="icon-btn" id="lockBtn" aria-label="Sign out">🔒</button>
+  </header>
+  <div id="status" class="status hidden"></div>
+
+  <div class="hero">
+    <div class="hero-card turn">
+      <div class="hero-ico" id="turnAv">🎲</div>
+      <div style="min-width:0"><div class="lbl">Next to choose</div><div class="big" id="turnName">—</div><div class="mini-btns" id="turnBtns"></div></div>
+    </div>
+    <div class="hero-card meet" id="meetCard">
+      <div class="hero-ico">📅</div>
+      <div style="min-width:0"><div class="lbl">Next meeting</div><div class="big" id="meetTitle">Nothing booked</div><div class="sub" id="meetSub"></div></div>
+    </div>
+  </div>
+
+  <div class="tabs"><button id="tabBooks" class="on">📖 Book log</button><button id="tabMembers">👥 Members</button></div>
+
+  <section id="booksView">
+    <div class="stats" id="stats"></div>
+    <input class="search" id="search" placeholder="Search title, author or chooser…">
+    <div class="genres" id="genreChips"></div>
+    <div class="grid" id="grid"></div>
+    <div class="empty hidden" id="booksEmpty"><div class="e-ico">📕</div><div id="booksEmptyTxt"></div></div>
+  </section>
+
+  <section id="membersView" class="hidden">
+    <div class="members" id="memberList"></div>
+    <div class="add-row"><input class="input" id="newMember" placeholder="Add a member's name" maxlength="40"><button class="btn" id="addMember">Add</button></div>
+    <p class="small" style="margin-top:10px">The turn to choose goes round in this order. Use the arrows to reorder.</p>
+  </section>
+</div>
+<button class="fab" id="fab">＋ Add book</button>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+/* =====================================================================
+   CONFIG — Supabase project. These keys are safe to be public: the
+   database only answers requests that carry the right club passcode.
+   ===================================================================== */
+const SUPABASE_URL = "https://jokagzhgdifmqyusaomc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_-aOfFMyT_bBZqGWjUJPSTQ_fFeZRTdg";
+const REFRESH_SECONDS = 60;   // how often to re-check for friends' changes while the page is open
+
+const GENRES = ["Fiction","Literary fiction","Crime / Thriller","Mystery","Fantasy","Sci-fi","Romance","Historical fiction","Horror","Classic","Young adult","Non-fiction","Biography / Memoir","Self-help","Poetry","Humour"];
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const S = { club:{ name:"Our Book Club" }, members:[], books:[], ratings:[], quotes:[],
+            tab:"books", genre:"", q:"", openBook:null };
+let sb = null;   // Supabase client (created once the passcode is known)
+
+/* =====================================================================
+   SMALL HELPERS
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const hue = str => { let h = 7; for (const c of String(str)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch(e){} }, del(k){ try { localStorage.removeItem(k); } catch(e){} } };
+const today = () => new Date().toLocaleDateString("en-CA");   // YYYY-MM-DD in local time
+const fmtDate = (d, t) => { if (!d) return ""; const x = new Date(d + "T12:00:00");
+  return x.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) + (t ? " · " + t : ""); };
+const fmtScore = v => v % 1 ? (+v).toFixed(1) : String(+v);
+const safeCover = s => (typeof s === "string" && (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s) || /^https:\/\/[^\s"'<>]+$/.test(s))) ? s : "";
+
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add("hidden"), 3200); }
+function status(msg){ const s = $("#status"); s.textContent = msg || ""; s.classList.toggle("hidden", !msg); }
+
+const activeMembers = () => S.members.filter(m => m.active).sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+const member = id => S.members.find(m => m.id === id);
+const mName = id => member(id)?.name || (id ? "Former member" : "—");
+function avatar(id, size = 28){
+  const n = member(id)?.name || "?";
+  return `<span class="av" style="width:${size}px;height:${size}px;font-size:${Math.round(size*.42)}px;background:hsl(${hue(id||"x")},45%,45%)" title="${esc(n)}">${esc(n.trim().charAt(0).toUpperCase())}</span>`;
+}
+function starHTML(v, cls = ""){ const pct = Math.max(0, Math.min(100, (v || 0) / 5 * 100));
+  return `<span class="stars ${cls}"><span class="bg">★★★★★</span><span class="fg" style="width:${pct}%">★★★★★</span></span>`; }
+function coverHTML(b){
+  const src = safeCover(b.cover);
+  if (src) return `<img class="cover" src="${esc(src)}" alt="" loading="lazy" onerror="this.replaceWith(document.createRange().createContextualFragment(window.genCover(${esc(JSON.stringify({t:b.title||"",a:b.author||""}))})))">`;
+  return genCover({ t: b.title, a: b.author });
+}
+window.genCover = ({ t, a }) => { const h = hue(t || "x");
+  return `<div class="gen-cover" style="background:linear-gradient(160deg,hsl(${h},42%,42%),hsl(${(h+40)%360},48%,28%))"><div class="gt">${esc(t || "Untitled")}</div><div class="ga">${esc(a || "")}</div></div>`; };
+
+/* =====================================================================
+   DATA LAYER — all Supabase calls live here
+   ===================================================================== */
+function makeClient(code){
+  return supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    global: { headers: { "x-club-code": code } },
+    auth: { persistSession: false }
+  });
+}
+async function checkCode(code){
+  const { data, error } = await makeClient(code).rpc("check_club_code");
+  if (error) throw error;
+  return data === true;
+}
+async function loadAll(){
+  const [club, members, books, ratings, quotes] = await Promise.all([
+    sb.from("club").select("*").eq("id", 1).maybeSingle(),
+    sb.from("members").select("*"),
+    sb.from("books").select("*"),
+    sb.from("ratings").select("*"),
+    sb.from("quotes").select("*"),
+  ]);
+  const err = [club, members, books, ratings, quotes].find(r => r.error);
+  if (err) throw err.error;
+  S.club = club.data || { name: "Our Book Club" };
+  S.members = members.data; S.books = books.data; S.quotes = quotes.data;
+  S.ratings = ratings.data.map(r => ({ ...r, score: +r.score }));
+}
+async function refresh(){
+  try { await loadAll(); status(""); render(); }
+  catch(e){ console.error(e); status("Can't reach the book log right now — it'll try again shortly."); }
+}
+// Run a write, then reload. Returns true on success.
+async function write(fn, okMsg){
+  try { const { error } = await fn(); if (error) throw error; await refresh(); if (okMsg) toast(okMsg); return true; }
+  catch(e){ console.error(e); toast("Couldn't save — check your connection and try again."); return false; }
+}
+
+/* =====================================================================
+   DERIVED DATA
+   ===================================================================== */
+function bookStats(id){
+  const rs = S.ratings.filter(r => r.book_id === id);
+  const count = rs.length, avg = count ? rs.reduce((a, r) => a + r.score, 0) / count : 0;
+  const recYes = rs.filter(r => r.recommend === true).length, recAns = rs.filter(r => r.recommend !== null).length;
+  return { count, avg, recYes, recAns, rs };
+}
+const sortedBooks = () => [...S.books].sort((a, b) => (b.meet_date || "9999").localeCompare(a.meet_date || "9999") || b.created_at.localeCompare(a.created_at));
+function turnInfo(){
+  const ms = activeMembers(); if (!ms.length) return null;
+  const latest = S.books.reduce((m, b) => b.created_at > m ? b.created_at : m, "");
+  const o = S.club;
+  if (o.turn_override_member && o.turn_override_at && o.turn_override_at > latest && ms.some(m => m.id === o.turn_override_member))
+    return { m: member(o.turn_override_member), override: true };
+  const last = [...S.books].filter(b => ms.some(m => m.id === b.chooser_id)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  if (!last) return { m: ms[0] };
+  return { m: ms[(ms.findIndex(m => m.id === last.chooser_id) + 1) % ms.length] };
+}
+const nextMeeting = () => S.books.filter(b => b.meet_date && b.meet_date >= today())
+  .sort((a, b) => (a.meet_date + (a.meet_time || "")).localeCompare(b.meet_date + (b.meet_time || "")))[0];
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+function render(){
+  $("#clubName").textContent = S.club.name || "Our Book Club";
+  document.title = S.club.name || "Book Club";
+  const ti = turnInfo();
+  $("#turnAv").innerHTML = ti ? avatar(ti.m.id, 46) : "🎲";
+  $("#turnName").textContent = ti ? ti.m.name + (ti.override ? " ✋" : "") : "Add members first";
+  $("#turnBtns").innerHTML = ti && activeMembers().length > 1 ? `<button class="chip-btn" data-act="skip">Skip ⏭</button><button class="chip-btn" data-act="pick">Change</button>` : "";
+  const nm = nextMeeting();
+  $("#meetTitle").textContent = nm ? nm.title : "Nothing booked";
+  $("#meetSub").textContent = nm ? [fmtDate(nm.meet_date, nm.meet_time), nm.location].filter(Boolean).join(" · ") : "Add a book with a future date";
+  $("#meetCard").dataset.book = nm ? nm.id : "";
+  $("#tabBooks").classList.toggle("on", S.tab === "books"); $("#tabMembers").classList.toggle("on", S.tab === "members");
+  $("#booksView").classList.toggle("hidden", S.tab !== "books"); $("#membersView").classList.toggle("hidden", S.tab !== "members");
+  renderStats(); renderBooks(); renderMembers();
+  if (S.openBook) refreshBookSheet();
+}
+function renderStats(){
+  const rated = S.books.map(b => ({ b, s: bookStats(b.id) })).filter(x => x.s.count).sort((a, b) => b.s.avg - a.s.avg);
+  const clubAvg = S.ratings.length ? S.ratings.reduce((a, r) => a + r.score, 0) / S.ratings.length : 0;
+  const gc = {}; S.books.forEach(b => { if (b.genre) gc[b.genre] = (gc[b.genre] || 0) + 1; });
+  const topG = Object.entries(gc).sort((a, b) => b[1] - a[1])[0];
+  const best = rated[0];
+  $("#stats").innerHTML = `
+    <div class="stat"><div class="n">${S.books.length}</div><div class="t">📚 Books logged</div></div>
+    <div class="stat"><div class="n">${clubAvg ? clubAvg.toFixed(1) + " ★" : "–"}</div><div class="t">⭐ Club average</div></div>
+    <div class="stat"><div class="n">${best ? esc(best.b.title) : "–"}</div><div class="t">🏆 Top rated${best ? " · " + best.s.avg.toFixed(1) : ""}</div></div>
+    <div class="stat"><div class="n">${topG ? esc(topG[0]) : "–"}</div><div class="t">🎭 Favourite genre</div></div>`;
+}
+function renderBooks(){
+  const genres = [...new Set(S.books.map(b => b.genre).filter(Boolean))].sort();
+  if (S.genre && !genres.includes(S.genre)) S.genre = "";
+  $("#genreChips").innerHTML = genres.length ? [`<button data-genre="" class="${S.genre ? "" : "on"}">All</button>`, ...genres.map(g => `<button data-genre="${esc(g)}" class="${S.genre === g ? "on" : ""}">${esc(g)}</button>`)].join("") : "";
+  const q = S.q.trim().toLowerCase(), t = today();
+  const list = sortedBooks().filter(b => (!S.genre || b.genre === S.genre) && (!q || [b.title, b.author, mName(b.chooser_id), b.location].join(" ").toLowerCase().includes(q)));
+  $("#grid").innerHTML = list.map(b => { const s = bookStats(b.id);
+    return `<button class="book" data-book="${b.id}">
+      <div class="cover-wrap">${coverHTML(b)}${b.meet_date && b.meet_date >= t ? `<span class="upcoming-tag">Upcoming</span>` : ""}</div>
+      <div class="meta"><div class="title">${esc(b.title)}</div><div class="author">${esc(b.author || "")}</div>
+      <div class="row">${s.count ? `<span>${starHTML(s.avg)} <span class="small">${s.avg.toFixed(1)}</span></span>` : `<span class="small">Not rated yet</span>`}${member(b.chooser_id) ? avatar(b.chooser_id, 22) : ""}</div>
+      ${b.meet_date ? `<div class="small">${esc(fmtDate(b.meet_date))}</div>` : ""}</div></button>`; }).join("");
+  $("#booksEmpty").classList.toggle("hidden", list.length > 0);
+  $("#booksEmptyTxt").textContent = S.books.length ? "No books match that search." : "No books logged yet — tap “Add book” to start.";
+}
+function renderMembers(){
+  const ms = activeMembers(), ti = turnInfo();
+  if (!ms.length){ $("#memberList").innerHTML = `<div class="empty"><div class="e-ico">👋</div>Add everyone in your book club below.</div>`; return; }
+  $("#memberList").innerHTML = ms.map((m, i) => {
+    const picks = S.books.filter(b => b.chooser_id === m.id);
+    const ps = picks.map(b => bookStats(b.id)).filter(s => s.count);
+    const pickAvg = ps.length ? ps.reduce((a, s) => a + s.avg, 0) / ps.length : 0;
+    const rated = S.ratings.filter(r => r.member_id === m.id).length;
+    return `<div class="member">${avatar(m.id, 40)}
+      <div class="info"><div class="name">${esc(m.name)}${ti && ti.m.id === m.id ? `<span class="turn-badge">Next pick</span>` : ""}</div>
+      <div class="bars"><span>📖 ${picks.length} picked</span><span>⭐ picks avg ${pickAvg ? pickAvg.toFixed(1) : "–"}</span><span>✍️ ${rated} rated</span></div></div>
+      <div>
+        <button class="icon-btn" data-mup="${i}" ${i === 0 ? "disabled" : ""} aria-label="Move up">▲</button>
+        <button class="icon-btn" data-mdown="${i}" ${i === ms.length - 1 ? "disabled" : ""} aria-label="Move down">▼</button>
+        <button class="icon-btn" data-medit="${m.id}" aria-label="Rename">✏️</button>
+        <button class="icon-btn" data-mdel="${m.id}" aria-label="Remove">🗑</button>
+      </div></div>`; }).join("");
+}
+
+/* =====================================================================
+   MODAL HELPERS (dialogs, confirm, prompt)
+   ===================================================================== */
+function openModal(html, onClose){
+  const ov = document.createElement("div"); ov.className = "overlay";
+  ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+  const close = () => { if (!ov.isConnected) return; ov.remove(); onClose && onClose(); };
+  ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close]")) close(); });
+  $("#modalRoot").appendChild(ov);
+  return { el: ov.querySelector(".sheet"), close };
+}
+function confirmBox(msg, ok = "Delete"){
+  return new Promise(res => {
+    const m = openModal(`<h2 style="font-size:19px;margin-bottom:10px">Are you sure?</h2><p>${esc(msg)}</p>
+      <div class="actions" style="margin-top:14px"><button class="btn danger" id="cOk">${esc(ok)}</button><button class="btn alt" data-close>Cancel</button></div>`, () => res(false));
+    m.el.querySelector("#cOk").onclick = () => { res(true); m.el.parentElement.remove(); };
+  });
+}
+function promptBox(title, value = ""){
+  return new Promise(res => {
+    const m = openModal(`<h2 style="font-size:19px;margin-bottom:10px">${esc(title)}</h2><input class="input" id="pIn" maxlength="40" value="${esc(value)}">
+      <div class="actions" style="margin-top:14px"><button class="btn" id="pOk">Save</button><button class="btn alt" data-close>Cancel</button></div>`, () => res(null));
+    const inp = m.el.querySelector("#pIn"); setTimeout(() => inp.focus(), 50);
+    const ok = () => { const v = inp.value.trim(); if (!v) return; res(v); m.el.parentElement.remove(); };
+    m.el.querySelector("#pOk").onclick = ok; inp.onkeydown = e => { if (e.key === "Enter") ok(); };
+  });
+}
+const memberOptions = sel => activeMembers().map(m => `<option value="${m.id}" ${m.id === sel ? "selected" : ""}>${esc(m.name)}</option>`).join("");
+
+/* =====================================================================
+   BOOK SEARCH — Open Library (free, no key needed)
+   ===================================================================== */
+async function searchBooks(q){
+  const url = "https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,cover_i,first_publish_year,subject,isbn&q=" + encodeURIComponent(q);
+  const r = await fetch(url); if (!r.ok) throw new Error("search failed");
+  const j = await r.json();
+  return (j.docs || []).map(d => ({
+    title: d.title || "", author: (d.author_name || []).slice(0, 2).join(", "),
+    year: d.first_publish_year || "", isbn: (d.isbn || [])[0] || "",
+    cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "",
+    thumb: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-S.jpg` : "",
+    genre: guessGenre(d.subject || [])
+  }));
+}
+// Open Library subjects are messy — map them to a tidy genre.
+function guessGenre(subjects){
+  const s = subjects.join(" | ").toLowerCase();
+  const rules = [["Young adult",/young adult|juvenile fiction|teen/],["Fantasy",/fantasy|magic|dragons/],["Sci-fi",/science fiction|dystopia|space/],
+    ["Crime / Thriller",/thriller|suspense|crime|detective/],["Mystery",/mystery/],["Horror",/horror|ghost|vampire/],["Romance",/romance|love stories/],
+    ["Historical fiction",/historical fiction|history.*fiction/],["Biography / Memoir",/biography|memoir|autobiography/],["Self-help",/self-help|self-actualization|personal development/],
+    ["Poetry",/poetry/],["Humour",/humor|humour|comedy/],["Classic",/classic/],["Non-fiction",/history|science|politics|economics|psychology/],["Fiction",/fiction/]];
+  const hit = rules.find(([, re]) => re.test(s)); return hit ? hit[0] : "";
+}
+
+/* =====================================================================
+   PHOTO UPLOAD — shrink to a small JPEG and store it in the database
+   ===================================================================== */
+function fileToCover(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const sc = Math.min(1, 300 / img.width, 450 / img.height);
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg", .78));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("bad image")); };
+    img.src = url;
+  });
+}
+
+/* =====================================================================
+   ADD / EDIT BOOK
+   ===================================================================== */
+function bookForm(existing){
+  if (!activeMembers().length){ toast("Add your club members first."); S.tab = "members"; render(); return; }
+  const b = existing || {}; const ti = turnInfo();
+  let cover = b.cover || "", isbn = b.isbn || "";
+  const allGenres = [...new Set([...GENRES, ...S.books.map(x => x.genre).filter(Boolean)])];
+  const m = openModal(`
+    <div class="sheet-head"><h2>${existing ? "Edit book" : "Add a book"}</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="lookup">
+      <div class="small" style="margin-bottom:6px;font-weight:600">🔎 Find the book to fill in the details</div>
+      <div class="lookup-row"><input class="input" id="lq" placeholder="Title, author or ISBN" style="background:var(--card)"><button class="btn green" id="lgo">Search</button></div>
+      <div class="results" id="lres"></div>
+    </div>
+    <div class="field"><label>Cover</label><div class="cover-pick"><div class="pv" id="pv"></div>
+      <div><label class="file-lbl">📷 Use my own photo<input type="file" accept="image/*" id="coverIn" hidden></label>
+      <div><button class="chip-btn" id="rmCover" style="margin-top:6px">Remove cover</button></div></div></div></div>
+    <div class="field"><label>Title *</label><input id="fTitle" maxlength="200" value="${esc(b.title)}"></div>
+    <div class="field"><label>Author</label><input id="fAuthor" maxlength="120" value="${esc(b.author)}"></div>
+    <div class="two">
+      <div class="field"><label>Genre</label><input id="fGenre" list="genreList" maxlength="40" value="${esc(b.genre)}"><datalist id="genreList">${allGenres.map(g => `<option value="${esc(g)}">`).join("")}</datalist></div>
+      <div class="field"><label>Chosen by</label><select id="fChooser">${memberOptions(b.chooser_id || ti?.m.id)}</select></div>
+    </div>
+    <div class="two">
+      <div class="field"><label>Club date</label><input type="date" id="fDate" value="${esc(b.meet_date)}"></div>
+      <div class="field"><label>Time</label><input type="time" id="fTime" value="${esc(b.meet_time)}"></div>
+    </div>
+    <div class="field"><label>Location</label><input id="fLoc" maxlength="100" placeholder="e.g. Sarah's house" value="${esc(b.location)}"></div>
+    <div class="actions"><button class="btn" id="fSave">${existing ? "Save changes" : "Add book"}</button><button class="btn alt" data-close>Cancel</button></div>`);
+  const el = m.el, f = id => el.querySelector(id);
+  const drawPv = () => { f("#pv").innerHTML = coverHTML({ cover, title: f("#fTitle").value || "Title", author: f("#fAuthor").value }); f("#rmCover").classList.toggle("hidden", !cover); };
+  drawPv(); f("#fTitle").addEventListener("input", drawPv);
+
+  // search → results → tap to fill
+  let results = [];
+  const doSearch = async () => {
+    const q = f("#lq").value.trim(); if (!q) return;
+    f("#lres").innerHTML = `<div class="small">Searching…</div>`;
+    try {
+      results = await searchBooks(q);
+      f("#lres").innerHTML = results.length ? results.map((r, i) => `<button class="result" data-r="${i}">
+        ${r.thumb ? `<img src="${esc(r.thumb)}" alt="">` : `<span class="noimg"></span>`}
+        <span><div class="rt">${esc(r.title)}</div><div class="ra">${esc(r.author)}${r.year ? " · " + r.year : ""}</div></span></button>`).join("")
+        : `<div class="small">No matches — try fewer words, or fill it in by hand.</div>`;
+    } catch(e){ f("#lres").innerHTML = `<div class="small">Search isn't working right now — fill it in by hand.</div>`; }
+  };
+  f("#lgo").onclick = doSearch; f("#lq").onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); doSearch(); } };
+  f("#lres").onclick = e => { const btn = e.target.closest("[data-r]"); if (!btn) return; const r = results[+btn.dataset.r];
+    f("#fTitle").value = r.title; f("#fAuthor").value = r.author; if (r.genre) f("#fGenre").value = r.genre;
+    if (r.cover) cover = r.cover; isbn = r.isbn; f("#lres").innerHTML = `<div class="small">✓ Filled in — check it over below.</div>`; drawPv(); };
+
+  f("#coverIn").onchange = async e => { const file = e.target.files[0]; if (!file) return;
+    try { cover = await fileToCover(file); drawPv(); } catch(err){ toast("Couldn't read that image — try a JPG or PNG."); } };
+  f("#rmCover").onclick = e => { e.preventDefault(); cover = ""; drawPv(); };
+  f("#fSave").onclick = async () => {
+    const title = f("#fTitle").value.trim(); if (!title){ toast("Give the book a title."); f("#fTitle").focus(); return; }
+    const row = { title, author: f("#fAuthor").value.trim() || null, genre: f("#fGenre").value.trim() || null,
+      chooser_id: f("#fChooser").value || null, meet_date: f("#fDate").value || null, meet_time: f("#fTime").value || null,
+      location: f("#fLoc").value.trim() || null, cover: cover || null, isbn: isbn || null };
+    f("#fSave").disabled = true; f("#fSave").textContent = "Saving…";
+    let newId = null;
+    const ok = await write(async () => {
+      if (existing) return sb.from("books").update(row).eq("id", b.id);
+      const r = await sb.from("books").insert(row).select("id").single(); newId = r.data?.id; return r;
+    }, existing ? "Saved ✓" : "Book added 📚");
+    if (ok){ m.close(); if (newId) openBook(newId); } else { f("#fSave").disabled = false; f("#fSave").textContent = "Try again"; }
+  };
+}
+
+/* =====================================================================
+   BOOK DETAIL — scores & quotes
+   ===================================================================== */
+let sheet = null;
+function openBook(id){
+  if (!S.books.some(x => x.id === id)) return;
+  S.openBook = id;
+  const meId = member(store.get("bc_me"))?.active ? store.get("bc_me") : activeMembers()[0]?.id;
+  sheet = openModal(`
+    <div class="sheet-head"><span style="flex:1"></span>
+      <button class="icon-btn" id="bEdit" aria-label="Edit">✏️</button><button class="icon-btn" id="bDel" aria-label="Delete">🗑</button>
+      <button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div id="bTop"></div><div id="bScore"></div>
+    <div class="section"><h3>Scores</h3><div class="rlist" id="bRatings"></div>
+      <div class="panel">
+        <div class="field" style="margin-bottom:8px"><label>Who's scoring?</label><select id="rWho">${memberOptions(meId)}</select></div>
+        <div class="slider-row"><input type="range" min="0.5" max="5" step="0.5" value="3" id="rScore"><span id="rStars"></span><span class="val" id="rVal">3</span></div>
+        <div class="small" style="margin-bottom:4px">Would you recommend it?</div>
+        <div class="toggle"><button class="yes" data-rec="yes">👍 Yes</button><button class="no" data-rec="no">👎 No</button></div>
+        <div class="actions"><button class="btn green" id="rSave">Save score</button><button class="btn alt" id="rDel">Didn't read it</button></div>
+      </div></div>
+    <div class="section"><h3>Favourite bits & quotes</h3><div id="bQuotes"></div>
+      <div class="panel">
+        <div class="two"><div class="field" style="margin-bottom:8px"><label>From</label><select id="qWho">${memberOptions(meId)}</select></div>
+        <div class="field" style="margin-bottom:8px"><label>Page (optional)</label><input id="qPage" maxlength="12" inputmode="numeric"></div></div>
+        <textarea class="input" id="qText" rows="3" maxlength="2000" placeholder="Type a quote or a favourite moment…"></textarea>
+        <div class="actions" style="margin-top:8px"><button class="btn" id="qAdd">Add to the book</button></div>
+      </div></div>`, () => { S.openBook = null; sheet = null; });
+  const f = s => sheet.el.querySelector(s); let rec = null;
+  const setRec = v => { rec = v; sheet.el.querySelectorAll("[data-rec]").forEach(x => x.classList.toggle("on", (x.dataset.rec === "yes" && v === true) || (x.dataset.rec === "no" && v === false))); };
+  const drawSlider = () => { const v = +f("#rScore").value; f("#rVal").textContent = fmtScore(v); f("#rStars").innerHTML = starHTML(v, "lg"); };
+  const loadMine = () => { const r = S.ratings.find(x => x.book_id === id && x.member_id === f("#rWho").value);
+    f("#rScore").value = r ? r.score : 3; setRec(r ? r.recommend : null); drawSlider();
+    f("#rSave").textContent = r ? "Update score" : "Save score"; f("#rDel").textContent = r ? "Remove score" : "Didn't read it"; };
+  f("#rScore").oninput = drawSlider;
+  f("#rWho").onchange = e => { store.set("bc_me", e.target.value); f("#qWho").value = e.target.value; loadMine(); };
+  f("#qWho").onchange = e => store.set("bc_me", e.target.value);
+  sheet.el.querySelectorAll("[data-rec]").forEach(x => x.onclick = () => { const v = x.dataset.rec === "yes"; setRec(rec === v ? null : v); });
+  f("#rSave").onclick = async () => { const who = f("#rWho").value; if (!who) return;
+    if (await write(() => sb.from("ratings").upsert({ book_id: id, member_id: who, score: +f("#rScore").value, recommend: rec, updated_at: new Date().toISOString() }), "Score saved ⭐")) loadMine(); };
+  f("#rDel").onclick = async () => { const who = f("#rWho").value;
+    if (!S.ratings.some(x => x.book_id === id && x.member_id === who)){ toast(mName(who) + " is marked as not read."); return; }
+    if (await write(() => sb.from("ratings").delete().eq("book_id", id).eq("member_id", who), "Score removed")) loadMine(); };
+  f("#qAdd").onclick = async () => { const text = f("#qText").value.trim(); if (!text) return;
+    if (await write(() => sb.from("quotes").insert({ book_id: id, member_id: f("#qWho").value || null, text, page: f("#qPage").value.trim() || null }), "Added 💬")){ f("#qText").value = ""; f("#qPage").value = ""; } };
+  f("#bEdit").onclick = () => { const cur = S.books.find(x => x.id === id); sheet.close(); bookForm(cur); };
+  f("#bDel").onclick = async () => { const cur = S.books.find(x => x.id === id);
+    if (await confirmBox(`Delete “${cur.title}” and all its scores and quotes? This can't be undone.`))
+      if (await write(() => sb.from("books").delete().eq("id", id), "Book deleted")) sheet?.close(); };
+  sheet.el.addEventListener("click", async e => { const d = e.target.closest("[data-qdel]"); if (!d) return;
+    if (await confirmBox("Remove this quote?", "Remove")) write(() => sb.from("quotes").delete().eq("id", d.dataset.qdel)); });
+  loadMine(); refreshBookSheet();
+}
+function refreshBookSheet(){
+  if (!sheet) return; const id = S.openBook, b = S.books.find(x => x.id === id);
+  if (!b){ sheet.close(); return; }
+  const s = bookStats(id), f = q => sheet.el.querySelector(q);
+  f("#bTop").innerHTML = `<div class="detail-top"><div class="cv">${coverHTML(b)}</div><div style="min-width:0">
+    <h2>${esc(b.title)}</h2><div class="small" style="font-size:14px">${esc(b.author || "Unknown author")}</div>
+    ${b.genre ? `<div style="margin-top:6px"><span class="tag">${esc(b.genre)}</span></div>` : ""}
+    <div class="facts"><div>${member(b.chooser_id) ? avatar(b.chooser_id, 22) : "🙋"} <span>Chosen by <b>${esc(mName(b.chooser_id))}</b></span></div>
+      ${b.meet_date ? `<div>📅 <span>${esc(fmtDate(b.meet_date, b.meet_time))}</span></div>` : ""}
+      ${b.location ? `<div>📍 <span>${esc(b.location)}</span></div>` : ""}</div></div></div>`;
+  f("#bScore").innerHTML = s.count ? `<div class="score-box"><div class="avg">${s.avg.toFixed(1)}</div><div style="flex:1">${starHTML(s.avg, "lg")}
+      <div class="small">Average from ${s.count} reader${s.count > 1 ? "s" : ""}</div>
+      ${s.recAns ? `<div class="rec-bar"><span style="width:${s.recYes / s.recAns * 100}%"></span></div><div class="small">👍 ${s.recYes} of ${s.recAns} recommend</div>` : ""}</div></div>`
+    : `<div class="score-box"><div style="font-size:30px">⭐</div><div class="small">No scores yet — be the first to rate it.</div></div>`;
+  const notRead = activeMembers().filter(m => !s.rs.some(r => r.member_id === m.id));
+  f("#bRatings").innerHTML = [...s.rs].sort((a, b) => b.score - a.score).map(r => `<div class="ritem">${avatar(r.member_id, 28)}<span class="nm">${esc(mName(r.member_id))}</span>
+      ${starHTML(r.score)}<b style="width:28px;text-align:right">${fmtScore(r.score)}</b><span>${r.recommend === true ? "👍" : r.recommend === false ? "👎" : "·"}</span></div>`).join("")
+    + (notRead.length && s.rs.length ? `<div class="small" style="padding:2px 4px">Not scored: ${notRead.map(m => esc(m.name)).join(", ")}</div>` : "");
+  const qs = S.quotes.filter(q => q.book_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  f("#bQuotes").innerHTML = qs.length ? qs.map(q => `<div class="quote"><p>“${esc(q.text)}”</p><div class="small">— ${esc(mName(q.member_id))}${q.page ? ", p." + esc(q.page) : ""}</div>
+      <button class="icon-btn del" data-qdel="${q.id}" aria-label="Remove quote">✕</button></div>`).join("") : `<div class="small" style="margin-bottom:6px">No quotes yet.</div>`;
+}
+
+/* =====================================================================
+   EVENTS
+   ===================================================================== */
+$("#tabBooks").onclick = () => { S.tab = "books"; render(); };
+$("#tabMembers").onclick = () => { S.tab = "members"; render(); };
+$("#search").oninput = e => { S.q = e.target.value; renderBooks(); };
+$("#genreChips").onclick = e => { const b = e.target.closest("[data-genre]"); if (b){ S.genre = b.dataset.genre; renderBooks(); } };
+$("#grid").onclick = e => { const b = e.target.closest("[data-book]"); if (b) openBook(b.dataset.book); };
+$("#meetCard").onclick = () => { const id = $("#meetCard").dataset.book; if (id) openBook(id); };
+$("#fab").onclick = () => bookForm(null);
+$("#renameClub").onclick = async () => { const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
+$("#lockBtn").onclick = () => { store.del("bc_code"); location.reload(); };
+const setTurn = id => write(() => sb.from("club").update({ turn_override_member: id, turn_override_at: new Date().toISOString() }).eq("id", 1));
+$("#turnBtns").onclick = e => {
+  const a = e.target.closest("[data-act]"); const ti = turnInfo(); if (!a || !ti) return; const ms = activeMembers();
+  if (a.dataset.act === "skip"){ const nx = ms[(ms.findIndex(m => m.id === ti.m.id) + 1) % ms.length]; setTurn(nx.id); toast("Skipped to " + nx.name); return; }
+  const m = openModal(`<h2 style="font-size:19px;margin-bottom:10px">Whose turn is it?</h2><div class="rlist">${ms.map(x => `<button class="ritem" style="border:0;cursor:pointer" data-pick="${x.id}">${avatar(x.id, 28)}<span class="nm" style="text-align:left">${esc(x.name)}</span></button>`).join("")}</div>
+    <div class="actions" style="margin-top:12px"><button class="btn alt" data-close>Cancel</button></div>`);
+  m.el.onclick = ev => { const p = ev.target.closest("[data-pick]"); if (p){ setTurn(p.dataset.pick); m.close(); } };
+};
+async function addMember(){
+  const inp = $("#newMember"), n = inp.value.trim(); if (!n) return;
+  if (activeMembers().some(m => m.name.toLowerCase() === n.toLowerCase())){ toast(n + " is already a member."); return; }
+  const order = Math.max(0, ...S.members.map(m => m.sort_order)) + 1;
+  if (await write(() => sb.from("members").insert({ name: n, sort_order: order }))){ inp.value = ""; inp.focus(); }
+}
+$("#addMember").onclick = addMember;
+$("#newMember").onkeydown = e => { if (e.key === "Enter") addMember(); };
+$("#memberList").onclick = async e => {
+  const t = e.target.closest("button"); if (!t) return; const ms = activeMembers();
+  // Swap two members, then save everyone's position as 0, 1, 2…
+  const swap = (i, j) => write(async () => {
+    const order = [...ms]; [order[i], order[j]] = [order[j], order[i]];
+    for (let k = 0; k < order.length; k++){
+      if (order[k].sort_order === k) continue;
+      const r = await sb.from("members").update({ sort_order: k }).eq("id", order[k].id); if (r.error) return r;
+    }
+    return { error: null };
+  });
+  if (t.dataset.mup) { const i = +t.dataset.mup; swap(i, i - 1); }
+  else if (t.dataset.mdown) { const i = +t.dataset.mdown; swap(i, i + 1); }
+  else if (t.dataset.medit){ const m = member(t.dataset.medit); const v = await promptBox("Rename member", m.name); if (v) write(() => sb.from("members").update({ name: v }).eq("id", m.id)); }
+  else if (t.dataset.mdel){ const m = member(t.dataset.mdel);
+    // "Remove" hides the member but keeps their past picks, scores and quotes in the log.
+    if (await confirmBox(`Remove ${m.name} from the club? Their past picks, scores and quotes stay in the log.`, "Remove")) write(() => sb.from("members").update({ active: false }).eq("id", m.id)); }
+};
+
+/* =====================================================================
+   START-UP — passcode, first load, background refresh
+   ===================================================================== */
+async function start(code){
+  sb = makeClient(code);
+  $("#gate").classList.add("hidden"); $("#app").classList.remove("hidden");
+  status("Loading your book club…");
+  await refresh();
+  if (!activeMembers().length){ S.tab = "members"; render(); }
+  setInterval(() => { if (document.visibilityState === "visible" && !S.openBook) refresh(); }, REFRESH_SECONDS * 1000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+}
+$("#gateForm").onsubmit = async e => {
+  e.preventDefault(); const code = $("#gateCode").value.trim(); if (!code) return;
+  $("#gateErr").textContent = "Checking…";
+  try {
+    if (await checkCode(code)){ store.set("bc_code", code); $("#gateErr").textContent = ""; start(code); }
+    else $("#gateErr").textContent = "That passcode isn't right.";
+  } catch(err){ $("#gateErr").textContent = "Can't connect right now — try again in a moment."; }
+};
+(async () => {
+  const saved = store.get("bc_code");
+  if (saved){ try { if (await checkCode(saved)) return start(saved); } catch(e){ return start(saved); } store.del("bc_code"); }
+  $("#gate").classList.remove("hidden"); $("#gateCode").focus();
+})();
+</script>
+</body>
+</html>
