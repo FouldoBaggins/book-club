@@ -64,6 +64,30 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 .genres button{white-space:nowrap;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
 .genres button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 
+/* ---------- Sort / view toolbar ---------- */
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.sort-sel{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 8px;font-size:13px}
+.view-toggle{display:flex;background:var(--line);border-radius:999px;padding:3px}
+.view-toggle button{border:0;background:transparent;border-radius:999px;padding:5px 10px;font-size:13px;cursor:pointer;color:var(--muted);font-weight:600}
+.view-toggle button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+
+/* ---------- List view ---------- */
+.list{display:flex;flex-direction:column;gap:8px}
+.lrow{display:flex;align-items:center;gap:12px;background:var(--card);border:0;border-radius:14px;padding:8px 12px 8px 8px;box-shadow:var(--shadow);text-align:left;cursor:pointer;width:100%}
+.lrow .lcv{width:44px;flex:none;border-radius:6px;overflow:hidden}
+.lrow .lcv .gen-cover{padding:4px} .lrow .lcv .gt{font-size:8px} .lrow .lcv .ga{display:none}
+.lrow .lmain{flex:1;min-width:0}
+.lrow .lt{font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .la{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .lside{text-align:right;flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.gtags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.gtags .tag{font-size:11px;padding:1px 7px}
+
+/* ---------- Genre picker ---------- */
+.gpick{display:flex;flex-wrap:wrap;gap:6px}
+.gpick button{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer}
+.gpick button.on{background:var(--green);color:#fff;border-color:var(--green)}
+
 /* ---------- Book grid ---------- */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
 .book{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);cursor:pointer;border:0;padding:0;text-align:left;display:flex;flex-direction:column}
@@ -142,7 +166,8 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 .toggle button.on.no{background:#8a3b2c;color:#fff;border-color:#8a3b2c}
 .cover-pick{display:flex;gap:12px;align-items:center}
 .cover-pick .pv{width:70px;border-radius:8px;overflow:hidden;flex:none;background:var(--line)}
-.file-lbl{display:inline-block;border:1px dashed var(--muted);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:500}
+.book .gen-cover{padding-top:36px}
+.file-lbl{text-transform:none!important;letter-spacing:0!important;font-size:14px!important;color:var(--ink)!important;display:inline-block;border:1px dashed var(--muted);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:500}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90vw}
 </style>
 </head>
@@ -164,21 +189,19 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 <div id="app" class="hidden">
 <div class="wrap">
   <header>
-    <span style="font-size:28px">📚</span>
     <h1 id="clubName">Book Club</h1>
     <button class="icon-btn" id="renameClub" aria-label="Rename club">✏️</button>
-    <button class="icon-btn" id="lockBtn" aria-label="Sign out">🔒</button>
   </header>
   <div id="status" class="status hidden"></div>
 
   <div class="hero">
-    <div class="hero-card turn">
-      <div class="hero-ico" id="turnAv">🎲</div>
-      <div style="min-width:0"><div class="lbl">Next to choose</div><div class="big" id="turnName">—</div><div class="mini-btns" id="turnBtns"></div></div>
-    </div>
     <div class="hero-card meet" id="meetCard">
       <div class="hero-ico">📅</div>
       <div style="min-width:0"><div class="lbl">Next meeting</div><div class="big" id="meetTitle">Nothing booked</div><div class="sub" id="meetSub"></div></div>
+    </div>
+    <div class="hero-card turn">
+      <div class="hero-ico" id="turnAv">🎲</div>
+      <div style="min-width:0"><div class="lbl">Next to choose</div><div class="big" id="turnName">—</div><div class="mini-btns" id="turnBtns"></div></div>
     </div>
   </div>
 
@@ -187,8 +210,19 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
   <section id="booksView">
     <div class="stats" id="stats"></div>
     <input class="search" id="search" placeholder="Search title, author or chooser…">
+    <div class="toolbar">
+      <span class="small">Sort</span>
+      <select id="sortBy" class="sort-sel">
+        <option value="date">Club date</option><option value="title">Title</option><option value="author">Author</option>
+        <option value="chooser">Chosen by</option><option value="score">Score</option><option value="rec">Recommended</option>
+      </select>
+      <button class="chip-btn" id="sortDir" aria-label="Reverse order">↓</button>
+      <span style="flex:1"></span>
+      <div class="view-toggle"><button data-view="grid" aria-label="Grid view">▦ Grid</button><button data-view="list" aria-label="List view">☰ List</button></div>
+    </div>
     <div class="genres" id="genreChips"></div>
     <div class="grid" id="grid"></div>
+    <div class="list hidden" id="list"></div>
     <div class="empty hidden" id="booksEmpty"><div class="e-ico">📕</div><div id="booksEmptyTxt"></div></div>
   </section>
 
@@ -211,7 +245,8 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
    ===================================================================== */
 const SUPABASE_URL = "https://jokagzhgdifmqyusaomc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_-aOfFMyT_bBZqGWjUJPSTQ_fFeZRTdg";
-const REFRESH_SECONDS = 60;   // how often to re-check for friends' changes while the page is open
+const GOOGLE_BOOKS_KEY = "";  // optional: add a free Google Books API key if searches start failing
+const REFRESH_SECONDS = 60;  // how often to re-check for friends' changes while the page is open
 
 const GENRES = ["Fiction","Literary fiction","Crime / Thriller","Mystery","Fantasy","Sci-fi","Romance","Historical fiction","Horror","Classic","Young adult","Non-fiction","Biography / Memoir","Self-help","Poetry","Humour"];
 
@@ -219,7 +254,7 @@ const GENRES = ["Fiction","Literary fiction","Crime / Thriller","Mystery","Fanta
    STATE
    ===================================================================== */
 const S = { club:{ name:"Our Book Club" }, members:[], books:[], ratings:[], quotes:[],
-            tab:"books", genre:"", q:"", openBook:null };
+            tab:"books", genre:"", q:"", openBook:null, view:"grid", sort:"date", dir:"desc" };
 let sb = null;   // Supabase client (created once the passcode is known)
 
 /* =====================================================================
@@ -302,7 +337,31 @@ function bookStats(id){
   const recYes = rs.filter(r => r.recommend === true).length, recAns = rs.filter(r => r.recommend !== null).length;
   return { count, avg, recYes, recAns, rs };
 }
-const sortedBooks = () => [...S.books].sort((a, b) => (b.meet_date || "9999").localeCompare(a.meet_date || "9999") || b.created_at.localeCompare(a.created_at));
+// A book's genres (older books may only have the single `genre` field).
+const bookGenres = b => Array.isArray(b.genres) && b.genres.length ? b.genres : (b.genre ? [b.genre] : []);
+
+// Sort books by the chosen field. Books missing that value always go last.
+function sortedBooks(field = S.sort, dir = S.dir){
+  const val = b => {
+    if (field === "date") return b.meet_date || null;
+    if (field === "title") return (b.title || "").toLowerCase();
+    if (field === "author") { const a = (b.author || "").split(",")[0].trim(); return a ? (a.split(" ").pop() + " " + a).toLowerCase() : null; } // by surname
+    if (field === "chooser") return member(b.chooser_id) ? mName(b.chooser_id).toLowerCase() : null;
+    const s = bookStats(b.id);
+    if (field === "score") return s.count ? s.avg : null;
+    if (field === "rec") return s.recAns ? s.recYes / s.recAns : null;
+  };
+  const sign = dir === "asc" ? 1 : -1;
+  return [...S.books].sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (x === null && y === null) return b.created_at.localeCompare(a.created_at);
+    if (x === null) return 1; if (y === null) return -1;
+    const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y));
+    return c * sign || b.created_at.localeCompare(a.created_at);
+  });
+}
+// Sensible starting direction when you switch sort field.
+const DEFAULT_DIR = { date:"desc", title:"asc", author:"asc", chooser:"asc", score:"desc", rec:"desc" };
 function turnInfo(){
   const ms = activeMembers(); if (!ms.length) return null;
   const latest = S.books.reduce((m, b) => b.created_at > m ? b.created_at : m, "");
@@ -325,7 +384,7 @@ function render(){
   const ti = turnInfo();
   $("#turnAv").innerHTML = ti ? avatar(ti.m.id, 46) : "🎲";
   $("#turnName").textContent = ti ? ti.m.name + (ti.override ? " ✋" : "") : "Add members first";
-  $("#turnBtns").innerHTML = ti && activeMembers().length > 1 ? `<button class="chip-btn" data-act="skip">Skip ⏭</button><button class="chip-btn" data-act="pick">Change</button>` : "";
+  $("#turnBtns").innerHTML = ti && activeMembers().length > 1 ? `<button class="chip-btn" data-act="pick">Change</button>` : "";
   const nm = nextMeeting();
   $("#meetTitle").textContent = nm ? nm.title : "Nothing booked";
   $("#meetSub").textContent = nm ? [fmtDate(nm.meet_date, nm.meet_time), nm.location].filter(Boolean).join(" · ") : "Add a book with a future date";
@@ -338,7 +397,7 @@ function render(){
 function renderStats(){
   const rated = S.books.map(b => ({ b, s: bookStats(b.id) })).filter(x => x.s.count).sort((a, b) => b.s.avg - a.s.avg);
   const clubAvg = S.ratings.length ? S.ratings.reduce((a, r) => a + r.score, 0) / S.ratings.length : 0;
-  const gc = {}; S.books.forEach(b => { if (b.genre) gc[b.genre] = (gc[b.genre] || 0) + 1; });
+  const gc = {}; S.books.forEach(b => bookGenres(b).forEach(g => { gc[g] = (gc[g] || 0) + 1; }));
   const topG = Object.entries(gc).sort((a, b) => b[1] - a[1])[0];
   const best = rated[0];
   $("#stats").innerHTML = `
@@ -348,12 +407,28 @@ function renderStats(){
     <div class="stat"><div class="n">${topG ? esc(topG[0]) : "–"}</div><div class="t">🎭 Favourite genre</div></div>`;
 }
 function renderBooks(){
-  const genres = [...new Set(S.books.map(b => b.genre).filter(Boolean))].sort();
+  const genres = [...new Set(S.books.flatMap(bookGenres))].sort();
   if (S.genre && !genres.includes(S.genre)) S.genre = "";
   $("#genreChips").innerHTML = genres.length ? [`<button data-genre="" class="${S.genre ? "" : "on"}">All</button>`, ...genres.map(g => `<button data-genre="${esc(g)}" class="${S.genre === g ? "on" : ""}">${esc(g)}</button>`)].join("") : "";
+  // toolbar state
+  $("#sortBy").value = S.sort;
+  $("#sortDir").textContent = S.dir === "asc" ? "↑" : "↓";
+  document.querySelectorAll("[data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === S.view));
+  $("#grid").classList.toggle("hidden", S.view !== "grid"); $("#list").classList.toggle("hidden", S.view !== "list");
+
   const q = S.q.trim().toLowerCase(), t = today();
-  const list = sortedBooks().filter(b => (!S.genre || b.genre === S.genre) && (!q || [b.title, b.author, mName(b.chooser_id), b.location].join(" ").toLowerCase().includes(q)));
-  $("#grid").innerHTML = list.map(b => { const s = bookStats(b.id);
+  const list = sortedBooks().filter(b => (!S.genre || bookGenres(b).includes(S.genre)) && (!q || [b.title, b.author, mName(b.chooser_id), b.location, ...bookGenres(b)].join(" ").toLowerCase().includes(q)));
+  $("#list").innerHTML = S.view !== "list" ? "" : list.map(b => { const s = bookStats(b.id);
+    return `<button class="lrow" data-book="${b.id}">
+      <div class="lcv">${coverHTML(b)}</div>
+      <div class="lmain"><div class="lt">${esc(b.title)}</div><div class="la">${esc(b.author || "")}</div>
+        ${bookGenres(b).length ? `<div class="gtags">${bookGenres(b).map(g => `<span class="tag">${esc(g)}</span>`).join("")}</div>` : ""}</div>
+      <div class="lside">
+        ${s.count ? `<span>${starHTML(s.avg)} <b>${s.avg.toFixed(1)}</b></span>` : `<span class="small">Not rated</span>`}
+        <span class="small">${s.recAns ? `👍 ${s.recYes}/${s.recAns}` : ""}</span>
+        <span class="small" style="display:flex;align-items:center;gap:5px">${b.meet_date ? esc(new Date(b.meet_date + "T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"2-digit"})) : ""}${member(b.chooser_id) ? avatar(b.chooser_id, 18) : ""}</span>
+      </div></button>`; }).join("");
+  $("#grid").innerHTML = S.view !== "grid" ? "" : list.map(b => { const s = bookStats(b.id);
     return `<button class="book" data-book="${b.id}">
       <div class="cover-wrap">${coverHTML(b)}${b.meet_date && b.meet_date >= t ? `<span class="upcoming-tag">Upcoming</span>` : ""}</div>
       <div class="meta"><div class="title">${esc(b.title)}</div><div class="author">${esc(b.author || "")}</div>
@@ -411,9 +486,40 @@ function promptBox(title, value = ""){
 const memberOptions = sel => activeMembers().map(m => `<option value="${m.id}" ${m.id === sel ? "selected" : ""}>${esc(m.name)}</option>`).join("");
 
 /* =====================================================================
-   BOOK SEARCH — Open Library (free, no key needed)
+   BOOK SEARCH — Google Books + Open Library, searched together.
+   Google is better for new releases; Open Library often has bigger covers.
    ===================================================================== */
 async function searchBooks(q){
+  const [g, o] = await Promise.allSettled([searchGoogle(q), searchOpenLibrary(q)]);
+  if (g.status === "rejected" && o.status === "rejected") throw new Error("search failed");
+  const merged = new Map();
+  const key = r => (r.title + "|" + r.author.split(",")[0]).toLowerCase().replace(/[^a-z0-9|]/g, "");
+  for (const r of g.status === "fulfilled" ? g.value : []) if (!merged.has(key(r))) merged.set(key(r), r);
+  for (const r of o.status === "fulfilled" ? o.value : []){
+    const k = key(r), hit = merged.get(k);
+    if (!hit) merged.set(k, r);
+    else {
+      if (r.cover) { hit.cover = r.cover; hit.thumb = hit.thumb || r.thumb; }   // prefer Open Library's larger cover
+      hit.genres = [...new Set([...hit.genres, ...r.genres])].slice(0, 3);
+    }
+  }
+  return [...merged.values()].slice(0, 12);
+}
+async function searchGoogle(q){
+  const url = "https://www.googleapis.com/books/v1/volumes?maxResults=10&printType=books&q=" + encodeURIComponent(q)
+    + (GOOGLE_BOOKS_KEY ? "&key=" + GOOGLE_BOOKS_KEY : "");
+  const r = await fetch(url); if (!r.ok) throw new Error("google search failed");
+  const j = await r.json();
+  return (j.items || []).map(v => {
+    const i = v.volumeInfo || {};
+    const img = (i.imageLinks?.thumbnail || i.imageLinks?.smallThumbnail || "").replace(/^http:/, "https:").replace("&edge=curl", "");
+    const ids = i.industryIdentifiers || [];
+    return { title: i.title || "", author: (i.authors || []).slice(0, 2).join(", "),
+      year: (i.publishedDate || "").slice(0, 4), isbn: (ids.find(x => x.type === "ISBN_13") || ids[0] || {}).identifier || "",
+      cover: img, thumb: img, genres: guessGenres(i.categories || []) };
+  }).filter(r => r.title);
+}
+async function searchOpenLibrary(q){
   const url = "https://openlibrary.org/search.json?limit=10&fields=key,title,author_name,cover_i,first_publish_year,subject,isbn&q=" + encodeURIComponent(q);
   const r = await fetch(url); if (!r.ok) throw new Error("search failed");
   const j = await r.json();
@@ -422,17 +528,20 @@ async function searchBooks(q){
     year: d.first_publish_year || "", isbn: (d.isbn || [])[0] || "",
     cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : "",
     thumb: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-S.jpg` : "",
-    genre: guessGenre(d.subject || [])
+    genres: guessGenres(d.subject || [])
   }));
 }
-// Open Library subjects are messy — map them to a tidy genre.
-function guessGenre(subjects){
+// Database subjects are messy — map them to up to 3 tidy genres (you can change them before saving).
+function guessGenres(subjects){
   const s = subjects.join(" | ").toLowerCase();
-  const rules = [["Young adult",/young adult|juvenile fiction|teen/],["Fantasy",/fantasy|magic|dragons/],["Sci-fi",/science fiction|dystopia|space/],
-    ["Crime / Thriller",/thriller|suspense|crime|detective/],["Mystery",/mystery/],["Horror",/horror|ghost|vampire/],["Romance",/romance|love stories/],
-    ["Historical fiction",/historical fiction|history.*fiction/],["Biography / Memoir",/biography|memoir|autobiography/],["Self-help",/self-help|self-actualization|personal development/],
-    ["Poetry",/poetry/],["Humour",/humor|humour|comedy/],["Classic",/classic/],["Non-fiction",/history|science|politics|economics|psychology/],["Fiction",/fiction/]];
-  const hit = rules.find(([, re]) => re.test(s)); return hit ? hit[0] : "";
+  const rules = [["Fantasy",/fantasy|magic|dragons/],["Sci-fi",/science fiction|dystopia/],["Crime / Thriller",/thriller|suspense|crime|detective/],
+    ["Mystery",/mystery/],["Horror",/horror|ghost|vampire/],["Romance",/romance|love stories/],["Historical fiction",/historical fiction/],
+    ["Young adult",/young adult|juvenile fiction/],["Humour",/humor|humour|comedy/],["Classic",/classic/],["Poetry",/poetry/],
+    ["Biography / Memoir",/biography|memoir|autobiography/],["Self-help",/self-help|personal development/]];
+  const hits = rules.filter(([, re]) => re.test(s)).map(([g]) => g).slice(0, 3);
+  if (!hits.length && /fiction/.test(s)) hits.push("Fiction");
+  if (!hits.length && /history|science|politics|economics|psychology|nonfiction|non-fiction/.test(s)) hits.push("Non-fiction");
+  return hits;
 }
 
 /* =====================================================================
@@ -459,7 +568,8 @@ function bookForm(existing){
   if (!activeMembers().length){ toast("Add your club members first."); S.tab = "members"; render(); return; }
   const b = existing || {}; const ti = turnInfo();
   let cover = b.cover || "", isbn = b.isbn || "";
-  const allGenres = [...new Set([...GENRES, ...S.books.map(x => x.genre).filter(Boolean)])];
+  const picked = new Set(bookGenres(b));
+  const allGenres = () => [...new Set([...GENRES, ...S.books.flatMap(bookGenres), ...picked])];
   const m = openModal(`
     <div class="sheet-head"><h2>${existing ? "Edit book" : "Add a book"}</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div class="lookup">
@@ -472,10 +582,11 @@ function bookForm(existing){
       <div><button class="chip-btn" id="rmCover" style="margin-top:6px">Remove cover</button></div></div></div></div>
     <div class="field"><label>Title *</label><input id="fTitle" maxlength="200" value="${esc(b.title)}"></div>
     <div class="field"><label>Author</label><input id="fAuthor" maxlength="120" value="${esc(b.author)}"></div>
-    <div class="two">
-      <div class="field"><label>Genre</label><input id="fGenre" list="genreList" maxlength="40" value="${esc(b.genre)}"><datalist id="genreList">${allGenres.map(g => `<option value="${esc(g)}">`).join("")}</datalist></div>
-      <div class="field"><label>Chosen by</label><select id="fChooser">${memberOptions(b.chooser_id || ti?.m.id)}</select></div>
+    <div class="field"><label>Genres <span style="text-transform:none;font-weight:400">(tap all that fit)</span></label>
+      <div class="gpick" id="gpick"></div>
+      <div class="lookup-row" style="margin-top:8px"><input class="input" id="gNew" maxlength="40" placeholder="Add another genre"><button class="btn alt" id="gAdd">Add</button></div>
     </div>
+    <div class="field"><label>Chosen by</label><select id="fChooser">${memberOptions(b.chooser_id || ti?.m.id)}</select></div>
     <div class="two">
       <div class="field"><label>Club date</label><input type="date" id="fDate" value="${esc(b.meet_date)}"></div>
       <div class="field"><label>Time</label><input type="time" id="fTime" value="${esc(b.meet_time)}"></div>
@@ -485,6 +596,14 @@ function bookForm(existing){
   const el = m.el, f = id => el.querySelector(id);
   const drawPv = () => { f("#pv").innerHTML = coverHTML({ cover, title: f("#fTitle").value || "Title", author: f("#fAuthor").value }); f("#rmCover").classList.toggle("hidden", !cover); };
   drawPv(); f("#fTitle").addEventListener("input", drawPv);
+
+  // genre picker: tap to toggle, or type a new one
+  const drawGenres = () => { f("#gpick").innerHTML = allGenres().map(g => `<button type="button" data-g="${esc(g)}" class="${picked.has(g) ? "on" : ""}">${esc(g)}</button>`).join(""); };
+  drawGenres();
+  f("#gpick").onclick = e => { const btn = e.target.closest("[data-g]"); if (!btn) return; const g = btn.dataset.g; picked.has(g) ? picked.delete(g) : picked.add(g); drawGenres(); };
+  const addGenre = () => { const g = f("#gNew").value.trim(); if (!g) return;
+    const match = allGenres().find(x => x.toLowerCase() === g.toLowerCase()); picked.add(match || g); f("#gNew").value = ""; drawGenres(); };
+  f("#gAdd").onclick = addGenre; f("#gNew").onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); addGenre(); } };
 
   // search → results → tap to fill
   let results = [];
@@ -501,7 +620,7 @@ function bookForm(existing){
   };
   f("#lgo").onclick = doSearch; f("#lq").onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); doSearch(); } };
   f("#lres").onclick = e => { const btn = e.target.closest("[data-r]"); if (!btn) return; const r = results[+btn.dataset.r];
-    f("#fTitle").value = r.title; f("#fAuthor").value = r.author; if (r.genre) f("#fGenre").value = r.genre;
+    f("#fTitle").value = r.title; f("#fAuthor").value = r.author; if (r.genres.length){ picked.clear(); r.genres.forEach(g => picked.add(g)); drawGenres(); }
     if (r.cover) cover = r.cover; isbn = r.isbn; f("#lres").innerHTML = `<div class="small">✓ Filled in — check it over below.</div>`; drawPv(); };
 
   f("#coverIn").onchange = async e => { const file = e.target.files[0]; if (!file) return;
@@ -509,7 +628,7 @@ function bookForm(existing){
   f("#rmCover").onclick = e => { e.preventDefault(); cover = ""; drawPv(); };
   f("#fSave").onclick = async () => {
     const title = f("#fTitle").value.trim(); if (!title){ toast("Give the book a title."); f("#fTitle").focus(); return; }
-    const row = { title, author: f("#fAuthor").value.trim() || null, genre: f("#fGenre").value.trim() || null,
+    const row = { title, author: f("#fAuthor").value.trim() || null, genres: [...picked], genre: [...picked][0] || null,
       chooser_id: f("#fChooser").value || null, meet_date: f("#fDate").value || null, meet_time: f("#fTime").value || null,
       location: f("#fLoc").value.trim() || null, cover: cover || null, isbn: isbn || null };
     f("#fSave").disabled = true; f("#fSave").textContent = "Saving…";
@@ -581,7 +700,7 @@ function refreshBookSheet(){
   const s = bookStats(id), f = q => sheet.el.querySelector(q);
   f("#bTop").innerHTML = `<div class="detail-top"><div class="cv">${coverHTML(b)}</div><div style="min-width:0">
     <h2>${esc(b.title)}</h2><div class="small" style="font-size:14px">${esc(b.author || "Unknown author")}</div>
-    ${b.genre ? `<div style="margin-top:6px"><span class="tag">${esc(b.genre)}</span></div>` : ""}
+    ${bookGenres(b).length ? `<div class="gtags" style="margin-top:6px">${bookGenres(b).map(g => `<span class="tag">${esc(g)}</span>`).join("")}</div>` : ""}
     <div class="facts"><div>${member(b.chooser_id) ? avatar(b.chooser_id, 22) : "🙋"} <span>Chosen by <b>${esc(mName(b.chooser_id))}</b></span></div>
       ${b.meet_date ? `<div>📅 <span>${esc(fmtDate(b.meet_date, b.meet_time))}</span></div>` : ""}
       ${b.location ? `<div>📍 <span>${esc(b.location)}</span></div>` : ""}</div></div></div>`;
@@ -609,11 +728,13 @@ $("#grid").onclick = e => { const b = e.target.closest("[data-book]"); if (b) op
 $("#meetCard").onclick = () => { const id = $("#meetCard").dataset.book; if (id) openBook(id); };
 $("#fab").onclick = () => bookForm(null);
 $("#renameClub").onclick = async () => { const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
-$("#lockBtn").onclick = () => { store.del("bc_code"); location.reload(); };
+$("#sortBy").onchange = e => { S.sort = e.target.value; S.dir = DEFAULT_DIR[S.sort]; store.set("bc_sort", S.sort); store.set("bc_dir", S.dir); renderBooks(); };
+$("#sortDir").onclick = () => { S.dir = S.dir === "asc" ? "desc" : "asc"; store.set("bc_dir", S.dir); renderBooks(); };
+document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { S.view = b.dataset.view; store.set("bc_view", S.view); renderBooks(); });
+$("#list").onclick = e => { const b = e.target.closest("[data-book]"); if (b) openBook(b.dataset.book); };
 const setTurn = id => write(() => sb.from("club").update({ turn_override_member: id, turn_override_at: new Date().toISOString() }).eq("id", 1));
 $("#turnBtns").onclick = e => {
   const a = e.target.closest("[data-act]"); const ti = turnInfo(); if (!a || !ti) return; const ms = activeMembers();
-  if (a.dataset.act === "skip"){ const nx = ms[(ms.findIndex(m => m.id === ti.m.id) + 1) % ms.length]; setTurn(nx.id); toast("Skipped to " + nx.name); return; }
   const m = openModal(`<h2 style="font-size:19px;margin-bottom:10px">Whose turn is it?</h2><div class="rlist">${ms.map(x => `<button class="ritem" style="border:0;cursor:pointer" data-pick="${x.id}">${avatar(x.id, 28)}<span class="nm" style="text-align:left">${esc(x.name)}</span></button>`).join("")}</div>
     <div class="actions" style="margin-top:12px"><button class="btn alt" data-close>Cancel</button></div>`);
   m.el.onclick = ev => { const p = ev.target.closest("[data-pick]"); if (p){ setTurn(p.dataset.pick); m.close(); } };
@@ -650,6 +771,10 @@ $("#memberList").onclick = async e => {
    ===================================================================== */
 async function start(code){
   sb = makeClient(code);
+  // remember each person's view & sort choice on their own phone
+  S.view = store.get("bc_view") === "list" ? "list" : "grid";
+  S.sort = DEFAULT_DIR[store.get("bc_sort")] ? store.get("bc_sort") : "date";
+  S.dir = ["asc", "desc"].includes(store.get("bc_dir")) ? store.get("bc_dir") : DEFAULT_DIR[S.sort];
   $("#gate").classList.add("hidden"); $("#app").classList.remove("hidden");
   status("Loading your book club…");
   await refresh();
