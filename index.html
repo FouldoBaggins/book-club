@@ -84,6 +84,14 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 .gtags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
 .gtags .tag{font-size:11px;padding:1px 7px}
 
+/* ---------- Fold-out section (scores) ---------- */
+.fold{margin-top:10px}
+.fold summary{list-style:none;display:flex;align-items:center;justify-content:space-between;background:var(--green-soft);color:var(--green);font-weight:600;padding:11px 14px;border-radius:14px;cursor:pointer;user-select:none}
+.fold summary::-webkit-details-marker{display:none}
+.fold[open] summary{border-radius:14px 14px 0 0}
+.fold .chev{transition:transform .2s}
+.fold[open] .chev{transform:rotate(180deg)}
+
 /* ---------- Genre picker ---------- */
 .gpick{display:flex;flex-wrap:wrap;gap:6px}
 .gpick button{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 11px;font-size:13px;cursor:pointer}
@@ -678,13 +686,17 @@ function openBook(id){
       <button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div id="bTop"></div><div id="bScore"></div>
     <div class="section"><h3>Scores</h3><div class="rlist" id="bRatings"></div>
-      <div class="panel">
-        <div class="field" style="margin-bottom:8px"><label>Who's scoring?</label><select id="rWho">${memberOptions(meId)}</select></div>
-        <div class="slider-row"><input type="range" min="0.5" max="5" step="0.5" value="3" id="rScore"><span id="rStars"></span><span class="val" id="rVal">3</span></div>
-        <div class="small" style="margin-bottom:4px">Would you recommend it?</div>
-        <div class="toggle"><button class="yes" data-rec="yes">👍 Yes</button><button class="no" data-rec="no">👎 No</button></div>
-        <div class="actions"><button class="btn green" id="rSave">Save score</button><button class="btn alt" id="rDel">Didn't read it</button></div>
-      </div></div>
+      <!-- Collapsed by default so nobody changes a score by accident -->
+      <details class="fold" id="rFold">
+        <summary><span>⭐ Add or change a score</span><span class="chev">▾</span></summary>
+        <div class="panel" style="margin-top:0;border-radius:0 0 14px 14px">
+          <div class="field" style="margin-bottom:8px"><label>Who's scoring?</label><select id="rWho">${memberOptions(meId)}</select></div>
+          <div class="slider-row"><input type="range" min="0.5" max="5" step="0.5" value="3" id="rScore"><span id="rStars"></span><span class="val" id="rVal">3</span></div>
+          <div class="small" style="margin-bottom:4px">Would you recommend it?</div>
+          <div class="toggle"><button class="yes" data-rec="yes">👍 Yes</button><button class="no" data-rec="no">👎 No</button></div>
+          <div class="actions"><button class="btn green" id="rSave">Save score</button><button class="btn alt" id="rDel">Didn't read it</button></div>
+        </div>
+      </details></div>
     <div class="section"><h3>Favourite bits & quotes</h3><div id="bQuotes"></div>
       <div class="panel">
         <div class="two"><div class="field" style="margin-bottom:8px"><label>From</label><select id="qWho">${memberOptions(meId)}</select></div>
@@ -703,11 +715,12 @@ function openBook(id){
   f("#qWho").onchange = e => store.set("bc_me", e.target.value);
   sheet.el.querySelectorAll("[data-rec]").forEach(x => x.onclick = () => { const v = x.dataset.rec === "yes"; setRec(rec === v ? null : v); });
   f("#rSave").onclick = async () => { const who = f("#rWho").value; if (!who) return;
-    if (await write(() => sb.from("ratings").upsert({ book_id: id, member_id: who, score: +f("#rScore").value, recommend: rec, updated_at: new Date().toISOString() }), "Score saved ⭐")) loadMine(); };
+    store.set("bc_me", who);   // remember who uses this phone
+    if (await write(() => sb.from("ratings").upsert({ book_id: id, member_id: who, score: +f("#rScore").value, recommend: rec, updated_at: new Date().toISOString() }), "Score saved ⭐")){ loadMine(); f("#rFold").open = false; } };
   f("#rDel").onclick = async () => { const who = f("#rWho").value;
     if (!S.ratings.some(x => x.book_id === id && x.member_id === who)){ toast(mName(who) + " is marked as not read."); return; }
     if (await write(() => sb.from("ratings").delete().eq("book_id", id).eq("member_id", who), "Score removed")) loadMine(); };
-  f("#qAdd").onclick = async () => { const text = f("#qText").value.trim(); if (!text) return;
+  f("#qAdd").onclick = async () => { const text = f("#qText").value.trim(); if (!text) return; store.set("bc_me", f("#qWho").value);
     if (await write(() => sb.from("quotes").insert({ book_id: id, member_id: f("#qWho").value || null, text, page: f("#qPage").value.trim() || null }), "Added 💬")){ f("#qText").value = ""; f("#qPage").value = ""; } };
   f("#bEdit").onclick = () => { const cur = S.books.find(x => x.id === id); sheet.close(); bookForm(cur); };
   f("#bDel").onclick = async () => { const cur = S.books.find(x => x.id === id);
