@@ -44,6 +44,7 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 .hero-card .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .hero-card .big{font-family:Fraunces,serif;font-size:20px;font-weight:700}
 .hero-card .sub{font-size:13px;color:var(--muted)}
+#meetIco{background:transparent}
 .hero-card.turn{background:linear-gradient(135deg,var(--green-soft),var(--card))}
 .hero-card.meet{background:linear-gradient(135deg,var(--accent-soft),var(--card));cursor:pointer}
 .hero-ico{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:22px;flex:none;background:var(--card)}
@@ -177,7 +178,7 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 <div id="gate" class="gate hidden">
   <form class="gate-card" id="gateForm">
     <div style="font-size:44px">📚</div>
-    <h1>Book Club</h1>
+    <h1 id="gateTitle">Book Club 📖🤓</h1>
     <p>Enter the club passcode</p>
     <input class="input" id="gateCode" autocomplete="off" autocapitalize="none" placeholder="Passcode" style="text-align:center">
     <div class="err" id="gateErr"></div>
@@ -190,13 +191,18 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 <div class="wrap">
   <header>
     <h1 id="clubName">Book Club</h1>
-    <button class="icon-btn" id="renameClub" aria-label="Rename club">✏️</button>
+    <button class="icon-btn" id="renameClub" aria-label="Club settings" title="Club settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.25.4-1.51 1z"/>
+      </svg>
+    </button>
   </header>
   <div id="status" class="status hidden"></div>
 
   <div class="hero">
     <div class="hero-card meet" id="meetCard">
-      <div class="hero-ico">📅</div>
+      <div class="hero-ico" id="meetIco"></div>
       <div style="min-width:0"><div class="lbl">Next meeting</div><div class="big" id="meetTitle">Nothing booked</div><div class="sub" id="meetSub"></div></div>
     </div>
     <div class="hero-card turn">
@@ -287,7 +293,21 @@ function coverHTML(b){
   if (src) return `<img class="cover" src="${esc(src)}" alt="" loading="lazy" onerror="this.replaceWith(document.createRange().createContextualFragment(window.genCover(${esc(JSON.stringify({t:b.title||"",a:b.author||""}))})))">`;
   return genCover({ t: b.title, a: b.author });
 }
-window.genCover = ({ t, a }) => { const h = hue(t || "x");
+// Little calendar page showing the real meeting date (blank page if nothing's booked).
+function calendarIcon(date){
+  const d = date ? new Date(date + "T12:00:00") : null;
+  const mon = d ? d.toLocaleDateString("en-GB", { month: "short" }).toUpperCase() : "";
+  const day = d ? d.getDate() : "";
+  return `<svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+    <rect x="4" y="6" width="36" height="34" rx="7" fill="#fffdf8" stroke="#d9cdb8" stroke-width="1"/>
+    <path d="M4 13a7 7 0 0 1 7-7h22a7 7 0 0 1 7 7v4H4z" fill="#b5532f"/>
+    <rect x="13" y="2.5" width="3" height="7" rx="1.5" fill="#7a3a22"/><rect x="28" y="2.5" width="3" height="7" rx="1.5" fill="#7a3a22"/>
+    ${d ? `<text x="22" y="15.2" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="7.5" font-weight="700" fill="#fff" letter-spacing=".6">${mon}</text>
+           <text x="22" y="34" text-anchor="middle" font-family="Fraunces,Georgia,serif" font-size="17" font-weight="700" fill="#2a2420">${day}</text>`
+        : `<g fill="#d9cdb8"><circle cx="13" cy="25" r="1.6"/><circle cx="22" cy="25" r="1.6"/><circle cx="31" cy="25" r="1.6"/><circle cx="13" cy="33" r="1.6"/><circle cx="22" cy="33" r="1.6"/><circle cx="31" cy="33" r="1.6"/></g>`}
+  </svg>`;
+}
+window.genCover =({ t, a }) => { const h = hue(t || "x");
   return `<div class="gen-cover" style="background:linear-gradient(160deg,hsl(${h},42%,42%),hsl(${(h+40)%360},48%,28%))"><div class="gt">${esc(t || "Untitled")}</div><div class="ga">${esc(a || "")}</div></div>`; };
 
 /* =====================================================================
@@ -386,7 +406,10 @@ function render(){
   $("#turnName").textContent = ti ? ti.m.name + (ti.override ? " ✋" : "") : "Add members first";
   $("#turnBtns").innerHTML = ti && activeMembers().length > 1 ? `<button class="chip-btn" data-act="pick">Change</button>` : "";
   const nm = nextMeeting();
-  $("#meetTitle").textContent = nm ? nm.title : "Nothing booked";
+  // title + the chooser's letter badge on the end
+  $("#meetTitle").innerHTML = nm ? `${esc(nm.title)}${member(nm.chooser_id) ? ` <span style="vertical-align:3px">${avatar(nm.chooser_id, 22)}</span>` : ""}` : "Nothing booked";
+  $("#meetIco").innerHTML = calendarIcon(nm?.meet_date);
+  store.set("bc_name", S.club.name || "");
   $("#meetSub").textContent = nm ? [fmtDate(nm.meet_date, nm.meet_time), nm.location].filter(Boolean).join(" · ") : "Add a book with a future date";
   $("#meetCard").dataset.book = nm ? nm.id : "";
   $("#tabBooks").classList.toggle("on", S.tab === "books"); $("#tabMembers").classList.toggle("on", S.tab === "members");
@@ -791,6 +814,7 @@ $("#gateForm").onsubmit = async e => {
   } catch(err){ $("#gateErr").textContent = "Can't connect right now — try again in a moment."; }
 };
 (async () => {
+  if (store.get("bc_name")) $("#gateTitle").textContent = store.get("bc_name");
   const saved = store.get("bc_code");
   if (saved){ try { if (await checkCode(saved)) return start(saved); } catch(e){ return start(saved); } store.del("bc_code"); }
   $("#gate").classList.remove("hidden"); $("#gateCode").focus();
