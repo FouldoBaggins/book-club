@@ -390,15 +390,18 @@ function sortedBooks(field = S.sort, dir = S.dir){
 }
 // Sensible starting direction when you switch sort field.
 const DEFAULT_DIR = { date:"desc", title:"asc", author:"asc", chooser:"asc", score:"desc", rec:"desc" };
+// Whose turn is it? Based on the book with the LATEST CLUB DATE (not the most recently
+// typed-in one), so adding past books to the log never changes the turn.
 function turnInfo(){
   const ms = activeMembers(); if (!ms.length) return null;
-  const latest = S.books.reduce((m, b) => b.created_at > m ? b.created_at : m, "");
-  const o = S.club;
-  if (o.turn_override_member && o.turn_override_at && o.turn_override_at > latest && ms.some(m => m.id === o.turn_override_member))
+  const byClubDate = (a, b) => (b.meet_date || "").localeCompare(a.meet_date || "") || b.created_at.localeCompare(a.created_at);
+  const latest = [...S.books].filter(b => ms.some(m => m.id === b.chooser_id)).sort(byClubDate)[0];
+  // A manual "Change" sticks until a newer book (by club date) is added after it.
+  const o = S.club, anchorAt = latest ? latest.created_at : "";
+  if (o.turn_override_member && o.turn_override_at && new Date(o.turn_override_at) > new Date(anchorAt || 0) && ms.some(m => m.id === o.turn_override_member))
     return { m: member(o.turn_override_member), override: true };
-  const last = [...S.books].filter(b => ms.some(m => m.id === b.chooser_id)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-  if (!last) return { m: ms[0] };
-  return { m: ms[(ms.findIndex(m => m.id === last.chooser_id) + 1) % ms.length] };
+  if (!latest) return { m: ms[0] };
+  return { m: ms[(ms.findIndex(m => m.id === latest.chooser_id) + 1) % ms.length] };
 }
 const nextMeeting = () => S.books.filter(b => b.meet_date && b.meet_date >= today())
   .sort((a, b) => (a.meet_date + (a.meet_time || "")).localeCompare(b.meet_date + (b.meet_time || "")))[0];
@@ -826,6 +829,10 @@ $("#gateForm").onsubmit = async e => {
     else $("#gateErr").textContent = "That passcode isn't right.";
   } catch(err){ $("#gateErr").textContent = "Can't connect right now — try again in a moment."; }
 };
+// Save covers on the phone after first load (needs sw.js uploaded next to this file).
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("sw.js").catch(e => console.warn("Cover saving unavailable:", e));
+}
 (async () => {
   if (store.get("bc_name")) $("#gateTitle").textContent = store.get("bc_name");
   const saved = store.get("bc_code");
