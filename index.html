@@ -84,6 +84,7 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 .gtags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
 .gtags .tag{font-size:11px;padding:1px 7px}
 
+.menu-item{border:0;cursor:pointer;text-align:left;width:100%;padding:12px}
 /* ---------- Fold-out section (scores) ---------- */
 .fold{margin-top:10px}
 .fold summary{list-style:none;display:flex;align-items:center;justify-content:space-between;background:var(--green-soft);color:var(--green);font-weight:600;padding:11px 14px;border-radius:14px;cursor:pointer;user-select:none}
@@ -321,6 +322,28 @@ window.genCover =({ t, a }) => { const h = hue(t || "x");
 /* =====================================================================
    DATA LAYER — all Supabase calls live here
    ===================================================================== */
+let clubCode = "";
+const STORED_COVERS = SUPABASE_URL + "/storage/v1/object/public/covers/";
+// Copy a cover (book-database link or uploaded photo) into the club's own storage.
+// If that fails for any reason, keep the original so saving a book never breaks.
+async function storeCover(src){
+  if (!src || src.startsWith(STORED_COVERS)) return src;
+  try {
+    const { data, error } = await sb.functions.invoke("save-cover", { body: { source: src }, headers: { "x-club-code": clubCode } });
+    if (error || !data?.url) throw error || new Error("no url");
+    return data.url;
+  } catch(e){ console.warn("Cover not stored, keeping original", e); return src; }
+}
+// Quietly move any covers that aren't stored yet (runs once per visit, a few at a time).
+async function migrateCovers(){
+  const todo = S.books.filter(b => b.cover && !b.cover.startsWith(STORED_COVERS)).slice(0, 15);
+  let changed = false;
+  for (const b of todo){
+    const url = await storeCover(b.cover);
+    if (url !== b.cover){ const { error } = await sb.from("books").update({ cover: url }).eq("id", b.id); if (!error) changed = true; }
+  }
+  if (changed) refresh();
+}
 function makeClient(code){
   return supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     global: { headers: { "x-club-code": code } },
@@ -666,6 +689,7 @@ function bookForm(existing){
       chooser_id: f("#fChooser").value || null, meet_date: f("#fDate").value || null, meet_time: f("#fTime").value || null,
       location: f("#fLoc").value.trim() || null, cover: cover || null, isbn: isbn || null };
     f("#fSave").disabled = true; f("#fSave").textContent = "Saving…";
+    row.cover = (await storeCover(cover)) || null;
     let newId = null;
     const ok = await write(async () => {
       if (existing) return sb.from("books").update(row).eq("id", b.id);
@@ -766,7 +790,42 @@ $("#genreChips").onclick = e => { const b = e.target.closest("[data-genre]"); if
 $("#grid").onclick = e => { const b = e.target.closest("[data-book]"); if (b) openBook(b.dataset.book); };
 $("#meetCard").onclick = () => { const id = $("#meetCard").dataset.book; if (id) openBook(id); };
 $("#fab").onclick = () => bookForm(null);
-$("#renameClub").onclick = async () => { const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
+// Settings menu (gear, top right)
+$("#renameClub").onclick = () => {
+  const m = openModal(`<div class="sheet-head"><h2>Club settings</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="rlist">
+      <button class="ritem menu-item" id="mRename"><span style="font-size:20px">✏️</span><span class="nm">Rename the club</span></button>
+      <button class="ritem menu-item" id="mExport"><span style="font-size:20px">⬇️</span><span class="nm">Export everything to a spreadsheet<div class="small">Books, everyone's scores and quotes (CSV — opens in Excel, Google Sheets or Numbers)</div></span></button>
+    </div>`);
+  m.el.querySelector("#mRename").onclick = async () => { m.close(); const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
+  m.el.querySelector("#mExport").onclick = () => { exportCSV(); m.close(); };
+};
+
+// Build a spreadsheet (CSV) of the whole log and download it.
+function exportCSV(){
+  const cell = v => { const s = v === null || v === undefined ? "" : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  // one score column per member who's in the club or has ever scored
+  const scorers = [...activeMembers(), ...S.members.filter(m => !m.active && S.ratings.some(r => r.member_id === m.id))];
+  const head = ["Title","Author","Genres","Chosen by","Club date","Time","Location","Average score","Number of scores","Recommended (yes / answered)",
+    ...scorers.map(m => m.name + " score"), ...scorers.map(m => m.name + " recommends?"), "Quotes"];
+  const rows = sortedBooks("date", "desc").map(b => {
+    const s = bookStats(b.id);
+    const mine = id => S.ratings.find(r => r.book_id === b.id && r.member_id === id);
+    const quotes = S.quotes.filter(q => q.book_id === b.id).sort((a, c) => a.created_at.localeCompare(c.created_at))
+      .map(q => `"${q.text}" — ${mName(q.member_id)}${q.page ? ", p." + q.page : ""}`).join("  |  ");
+    return [b.title, b.author, bookGenres(b).join(", "), mName(b.chooser_id), b.meet_date, b.meet_time, b.location,
+      s.count ? s.avg.toFixed(1) : "", s.count || "", s.recAns ? `${s.recYes} / ${s.recAns}` : "",
+      ...scorers.map(m => mine(m.id)?.score ?? ""), ...scorers.map(m => { const r = mine(m.id); return r ? (r.recommend === true ? "Yes" : r.recommend === false ? "No" : "") : ""; }),
+      quotes];
+  });
+  const csv = "\uFEFF" + [head, ...rows].map(r => r.map(cell).join(",")).join("\r\n");   // \uFEFF keeps emojis/accents right in Excel
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `${(S.club.name || "book-club").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "book-club"}-${today()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast("Spreadsheet downloaded ⬇️");
+}
 $("#sortBy").onchange = e => { S.sort = e.target.value; S.dir = DEFAULT_DIR[S.sort]; store.set("bc_sort", S.sort); store.set("bc_dir", S.dir); renderBooks(); };
 $("#sortDir").onclick = () => { S.dir = S.dir === "asc" ? "desc" : "asc"; store.set("bc_dir", S.dir); renderBooks(); };
 document.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { S.view = b.dataset.view; store.set("bc_view", S.view); renderBooks(); });
@@ -809,7 +868,7 @@ $("#memberList").onclick = async e => {
    START-UP — passcode, first load, background refresh
    ===================================================================== */
 async function start(code){
-  sb = makeClient(code);
+  sb = makeClient(code); clubCode = code;
   // remember each person's view & sort choice on their own phone
   S.view = store.get("bc_view") === "list" ? "list" : "grid";
   S.sort = DEFAULT_DIR[store.get("bc_sort")] ? store.get("bc_sort") : "date";
@@ -818,6 +877,7 @@ async function start(code){
   status("Loading your book club…");
   await refresh();
   if (!activeMembers().length){ S.tab = "members"; render(); }
+  migrateCovers();
   setInterval(() => { if (document.visibilityState === "visible" && !S.openBook) refresh(); }, REFRESH_SECONDS * 1000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 }
