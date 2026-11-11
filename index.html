@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Book Club</title>
+<!-- Installable app (PWA) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1916" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Book Club">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -516,19 +526,44 @@ function renderMembers(){
 /* =====================================================================
    MODAL HELPERS (dialogs, confirm, prompt)
    ===================================================================== */
+// Pop-ups (book details, forms, menus) each add a step to the browser history,
+// so the phone's back button / gesture closes the pop-up instead of leaving the app.
+const modalStack = [];
+function dismissModal(entry){
+  const i = modalStack.indexOf(entry); if (i >= 0) modalStack.splice(i, 1);
+  if (entry.ov.isConnected){ entry.ov.remove(); entry.onClose && entry.onClose(); }
+  entry.waiting.splice(0).forEach(r => r());
+}
+window.addEventListener("popstate", () => {
+  // Close the pop-up we asked to close, or (back button) the top one
+  const closing = modalStack.filter(e => e.closing);
+  const target = closing.length ? closing[closing.length - 1] : modalStack[modalStack.length - 1];
+  if (target) dismissModal(target);
+});
 function openModal(html, onClose){
   const ov = document.createElement("div"); ov.className = "overlay";
   ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
-  const close = () => { if (!ov.isConnected) return; ov.remove(); onClose && onClose(); };
+  const entry = { ov, onClose, closing: false, waiting: [] };
+  // close() returns a promise that resolves once the pop-up has gone
+  const close = () => new Promise(res => {
+    if (!ov.isConnected) return res();
+    entry.waiting.push(res);
+    if (entry.closing) return;
+    entry.closing = true;
+    history.back();                                                       // popstate then removes it
+    setTimeout(() => { if (ov.isConnected) dismissModal(entry); }, 1500); // safety net
+  });
   ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close]")) close(); });
   $("#modalRoot").appendChild(ov);
+  modalStack.push(entry);
+  history.pushState({ bcModal: modalStack.length }, "");
   return { el: ov.querySelector(".sheet"), close };
 }
 function confirmBox(msg, ok = "Delete"){
   return new Promise(res => {
     const m = openModal(`<h2 style="font-size:19px;margin-bottom:10px">Are you sure?</h2><p>${esc(msg)}</p>
       <div class="actions" style="margin-top:14px"><button class="btn danger" id="cOk">${esc(ok)}</button><button class="btn alt" data-close>Cancel</button></div>`, () => res(false));
-    m.el.querySelector("#cOk").onclick = () => { res(true); m.el.parentElement.remove(); };
+    m.el.querySelector("#cOk").onclick = () => { res(true); m.close(); };
   });
 }
 function promptBox(title, value = ""){
@@ -536,7 +571,7 @@ function promptBox(title, value = ""){
     const m = openModal(`<h2 style="font-size:19px;margin-bottom:10px">${esc(title)}</h2><input class="input" id="pIn" maxlength="40" value="${esc(value)}">
       <div class="actions" style="margin-top:14px"><button class="btn" id="pOk">Save</button><button class="btn alt" data-close>Cancel</button></div>`, () => res(null));
     const inp = m.el.querySelector("#pIn"); setTimeout(() => inp.focus(), 50);
-    const ok = () => { const v = inp.value.trim(); if (!v) return; res(v); m.el.parentElement.remove(); };
+    const ok = () => { const v = inp.value.trim(); if (!v) return; res(v); m.close(); };
     m.el.querySelector("#pOk").onclick = ok; inp.onkeydown = e => { if (e.key === "Enter") ok(); };
   });
 }
@@ -695,7 +730,7 @@ function bookForm(existing){
       if (existing) return sb.from("books").update(row).eq("id", b.id);
       const r = await sb.from("books").insert(row).select("id").single(); newId = r.data?.id; return r;
     }, existing ? "Saved ✓" : "Book added 📚");
-    if (ok){ m.close(); if (newId) openBook(newId); } else { f("#fSave").disabled = false; f("#fSave").textContent = "Try again"; }
+    if (ok){ await m.close(); if (newId) openBook(newId); } else { f("#fSave").disabled = false; f("#fSave").textContent = "Try again"; }
   };
 }
 
@@ -749,7 +784,7 @@ function openBook(id){
     if (await write(() => sb.from("ratings").delete().eq("book_id", id).eq("member_id", who), "Score removed")) loadMine(); };
   f("#qAdd").onclick = async () => { const text = f("#qText").value.trim(); if (!text) return; store.set("bc_me", f("#qWho").value);
     if (await write(() => sb.from("quotes").insert({ book_id: id, member_id: f("#qWho").value || null, text, page: f("#qPage").value.trim() || null }), "Added 💬")){ f("#qText").value = ""; f("#qPage").value = ""; } };
-  f("#bEdit").onclick = () => { const cur = S.books.find(x => x.id === id); sheet.close(); bookForm(cur); };
+  f("#bEdit").onclick = async () => { const cur = S.books.find(x => x.id === id); await sheet.close(); bookForm(cur); };
   f("#bDel").onclick = async () => { const cur = S.books.find(x => x.id === id);
     if (await confirmBox(`Delete “${cur.title}” and all its scores and quotes? This can't be undone.`))
       if (await write(() => sb.from("books").delete().eq("id", id), "Book deleted")) sheet?.close(); };
@@ -797,7 +832,7 @@ $("#renameClub").onclick = () => {
       <button class="ritem menu-item" id="mRename"><span style="font-size:20px">✏️</span><span class="nm">Rename the club</span></button>
       <button class="ritem menu-item" id="mExport"><span style="font-size:20px">⬇️</span><span class="nm">Export everything to a spreadsheet<div class="small">Books, everyone's scores and quotes (CSV — opens in Excel, Google Sheets or Numbers)</div></span></button>
     </div>`);
-  m.el.querySelector("#mRename").onclick = async () => { m.close(); const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
+  m.el.querySelector("#mRename").onclick = async () => { await m.close(); const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
   m.el.querySelector("#mExport").onclick = () => { exportCSV(); m.close(); };
 };
 
