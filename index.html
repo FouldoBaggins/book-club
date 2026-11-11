@@ -74,6 +74,10 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 .hero-card .big{font-family:Fraunces,serif;font-size:20px;font-weight:700}
 .hero-card .sub{font-size:13px;color:var(--muted)}
 #meetIco{background:transparent}
+.upnext{display:flex;flex-direction:column;align-items:flex-start;gap:1px;width:100%;margin-top:10px;padding:8px 10px;border:0;border-radius:12px;background:var(--card);text-align:left;cursor:pointer;color:var(--ink)}
+.upnext .un-lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.upnext .un-title{font-family:Fraunces,serif;font-weight:700;font-size:16px;display:flex;align-items:center;gap:6px}
+.upnext .un-sub{font-size:12px;color:var(--muted)}
 .hero-card.turn{background:linear-gradient(135deg,var(--green-soft),var(--card))}
 .hero-card.meet{background:linear-gradient(135deg,var(--accent-soft),var(--card));cursor:pointer}
 .hero-ico{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:22px;flex:none;background:var(--card)}
@@ -241,7 +245,8 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
   <div class="hero">
     <div class="hero-card meet" id="meetCard">
       <div class="hero-ico" id="meetIco"></div>
-      <div style="min-width:0"><div class="lbl">Next meeting</div><div class="big" id="meetTitle">Nothing booked</div><div class="sub" id="meetSub"></div></div>
+      <div style="min-width:0;flex:1"><div class="lbl" id="meetLbl">Next meeting</div><div class="big" id="meetTitle">Nothing booked</div><div class="sub" id="meetSub"></div>
+        <button class="upnext hidden" id="meetNext" type="button"></button></div>
     </div>
     <div class="hero-card turn">
       <div class="hero-ico" id="turnAv">🎲</div>
@@ -475,6 +480,15 @@ function render(){
   store.set("bc_name", S.club.name || "");
   $("#meetSub").textContent = nm ? [fmtDate(nm.meet_date, nm.meet_time), nm.location].filter(Boolean).join(" · ") : "Add a book with a future date";
   $("#meetCard").dataset.book = nm ? nm.id : "";
+  // On meeting day: label it "Today", and show the following book underneath — only if one is booked for a later date
+  const isToday = nm && nm.meet_date === today();
+  $("#meetLbl").textContent = isToday ? "Today's meeting" : "Next meeting";
+  const after = isToday ? S.books.filter(b => b.meet_date && b.meet_date > nm.meet_date)
+    .sort((a, b) => (a.meet_date + (a.meet_time || "")).localeCompare(b.meet_date + (b.meet_time || "")))[0] : null;
+  $("#meetNext").classList.toggle("hidden", !after);
+  $("#meetNext").dataset.book = after ? after.id : "";
+  $("#meetNext").innerHTML = after ? `<span class="un-lbl">Up next</span><span class="un-title">${esc(after.title)}${member(after.chooser_id) ? ` ${avatar(after.chooser_id, 18)}` : ""}</span>
+    <span class="un-sub">${esc([fmtDate(after.meet_date, after.meet_time), after.location].filter(Boolean).join(" · "))}</span>` : "";
   $("#tabBooks").classList.toggle("on", S.tab === "books"); $("#tabMembers").classList.toggle("on", S.tab === "members");
   $("#booksView").classList.toggle("hidden", S.tab !== "books"); $("#membersView").classList.toggle("hidden", S.tab !== "members");
   renderStats(); renderBooks(); renderMembers();
@@ -842,7 +856,9 @@ $("#tabMembers").onclick = () => { S.tab = "members"; render(); };
 $("#search").oninput = e => { S.q = e.target.value; renderBooks(); };
 $("#genreChips").onclick = e => { const b = e.target.closest("[data-genre]"); if (b){ S.genre = b.dataset.genre; renderBooks(); } };
 $("#grid").onclick = e => { const b = e.target.closest("[data-book]"); if (b) openBook(b.dataset.book); };
-$("#meetCard").onclick = () => { const id = $("#meetCard").dataset.book; if (id) openBook(id); };
+$("#meetCard").onclick = e => {
+  const nextBtn = e.target.closest("#meetNext");   // tapping "Up next" opens that book instead
+  const id = nextBtn ? nextBtn.dataset.book : $("#meetCard").dataset.book; if (id) openBook(id); };
 $("#fab").onclick = () => bookForm(null);
 // Settings menu (gear, top right)
 $("#renameClub").onclick = () => {
