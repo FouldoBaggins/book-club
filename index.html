@@ -16,6 +16,21 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+/* Theme: "auto" follows the phone; "light" / "dark" are this phone's own choice. */
+const THEME_BAR = { light: "#f6f1e7", dark: "#1c1916" };
+function applyTheme(choice){
+  const root = document.documentElement;
+  if (choice === "light" || choice === "dark") root.dataset.theme = choice; else delete root.dataset.theme;
+  // top bar colour: match the chosen theme, or follow the phone on "auto"
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => {
+    const media = m.dataset.media || m.getAttribute("media"); m.dataset.media = media;
+    if (choice === "light" || choice === "dark"){ m.removeAttribute("media"); m.content = THEME_BAR[choice]; }
+    else { m.setAttribute("media", media); m.content = media.includes("dark") ? THEME_BAR.dark : THEME_BAR.light; }
+  });
+}
+try { applyTheme(localStorage.getItem("bc_theme") || "auto"); } catch(e){}
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ---------- Theme ---------- */
@@ -24,10 +39,14 @@
   --accent:#b5532f; --accent-soft:#f3dfd3; --green:#2f6b4f; --green-soft:#dcebe2;
   --star:#e2a227; --shadow:0 1px 2px rgba(60,40,20,.06),0 4px 14px rgba(60,40,20,.07); --r:16px;
 }
+/* Dark colours: used when this phone chose "Dark", or chose "Auto" and the phone is in dark mode */
+:root[data-theme="dark"]{--paper:#1c1916;--card:#26221e;--ink:#f1ebe2;--muted:#a99d91;--line:#3a342e;
+  --accent:#e07a52;--accent-soft:#4a2e22;--green:#6fbf95;--green-soft:#22382d;--shadow:0 2px 10px rgba(0,0,0,.35);color-scheme:dark}
 @media (prefers-color-scheme:dark){
-  :root{--paper:#1c1916;--card:#26221e;--ink:#f1ebe2;--muted:#a99d91;--line:#3a342e;
-  --accent:#e07a52;--accent-soft:#4a2e22;--green:#6fbf95;--green-soft:#22382d;--shadow:0 2px 10px rgba(0,0,0,.35)}
+  :root:not([data-theme="light"]){--paper:#1c1916;--card:#26221e;--ink:#f1ebe2;--muted:#a99d91;--line:#3a342e;
+  --accent:#e07a52;--accent-soft:#4a2e22;--green:#6fbf95;--green-soft:#22382d;--shadow:0 2px 10px rgba(0,0,0,.35);color-scheme:dark}
 }
+:root[data-theme="light"]{color-scheme:light}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -830,10 +849,19 @@ $("#renameClub").onclick = () => {
   const m = openModal(`<div class="sheet-head"><h2>Club settings</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div class="rlist">
       <button class="ritem menu-item" id="mRename"><span style="font-size:20px">✏️</span><span class="nm">Rename the club</span></button>
+      <div class="ritem" style="flex-wrap:wrap;gap:10px;padding:12px"><span style="font-size:20px">🌓</span><span class="nm">Theme<div class="small">Just for this phone</div></span>
+        <div class="view-toggle" role="group" aria-label="Theme">
+          <button data-theme-pick="auto">Auto</button><button data-theme-pick="light">Light</button><button data-theme-pick="dark">Dark</button>
+        </div></div>
       <button class="ritem menu-item" id="mExport"><span style="font-size:20px">⬇️</span><span class="nm">Export everything to a spreadsheet<div class="small">Books, everyone's scores and quotes (CSV — opens in Excel, Google Sheets or Numbers)</div></span></button>
     </div>`);
   m.el.querySelector("#mRename").onclick = async () => { await m.close(); const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
   m.el.querySelector("#mExport").onclick = () => { exportCSV(); m.close(); };
+  const drawTheme = () => { const cur = store.get("bc_theme") || "auto";
+    m.el.querySelectorAll("[data-theme-pick]").forEach(b => b.classList.toggle("on", b.dataset.themePick === cur)); };
+  m.el.querySelectorAll("[data-theme-pick]").forEach(b => b.onclick = () => {
+    store.set("bc_theme", b.dataset.themePick); applyTheme(b.dataset.themePick); drawTheme(); });
+  drawTheme();
 };
 
 // Build a spreadsheet (CSV) of the whole log and download it.
