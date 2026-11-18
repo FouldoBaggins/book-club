@@ -211,7 +211,9 @@ header h1{font-size:26px;flex:1;min-width:0;overflow:hidden;text-overflow:ellips
 .cover-pick .pv{width:70px;border-radius:8px;overflow:hidden;flex:none;background:var(--line)}
 .book .gen-cover{padding-top:36px}
 .file-lbl{text-transform:none!important;letter-spacing:0!important;font-size:14px!important;color:var(--ink)!important;display:inline-block;border:1px dashed var(--muted);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:500}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90vw}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90vw;display:flex;align-items:center;gap:14px}
+.toast-btn{border:0;background:transparent;color:var(--accent-soft);font-weight:700;font-size:14px;padding:6px 4px;cursor:pointer;text-decoration:underline}
+.btn.danger-link{background:transparent;color:#b3261e;padding:10px 0}
 </style>
 </head>
 <body>
@@ -303,7 +305,7 @@ const GENRES = ["Fiction","Literary fiction","Crime","Thriller","Mystery","Fanta
    STATE
    ===================================================================== */
 const S = { club:{ name:"Our Book Club" }, members:[], books:[], ratings:[], quotes:[],
-            tab:"books", genre:"", q:"", openBook:null, view:"grid", sort:"date", dir:"desc" };
+            deletedBooks:[], _ratingsAll:[], _quotesAll:[], tab:"books", genre:"", q:"", openBook:null, view:"grid", sort:"date", dir:"desc" };
 let sb = null;   // Supabase client (created once the passcode is known)
 
 /* =====================================================================
@@ -319,6 +321,14 @@ const fmtDate = (d, t) => { if (!d) return ""; const x = new Date(d + "T12:00:00
 const fmtScore = v => v % 1 ? (+v).toFixed(1) : String(+v);
 const safeCover = s => (typeof s === "string" && (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s) || /^https:\/\/[^\s"'<>]+$/.test(s))) ? s : "";
 
+function toastAction(msg, label, fn, ms = 10000){
+  const t = $("#toast"); t.textContent = "";
+  const span = document.createElement("span"); span.textContent = msg;
+  const btn = document.createElement("button"); btn.className = "toast-btn"; btn.textContent = label;
+  btn.onclick = () => { t.classList.add("hidden"); fn(); };
+  t.append(span, btn); t.classList.remove("hidden");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add("hidden"), ms);
+}
 function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add("hidden"), 3200); }
 function status(msg){ const s = $("#status"); s.textContent = msg || ""; s.classList.toggle("hidden", !msg); }
 
@@ -400,8 +410,15 @@ async function loadAll(){
   const err = [club, members, books, ratings, quotes].find(r => r.error);
   if (err) throw err.error;
   S.club = club.data || { name: "Our Book Club" };
-  S.members = members.data; S.books = books.data; S.quotes = quotes.data;
-  S.ratings = ratings.data.map(r => ({ ...r, score: +r.score }));
+  S.members = members.data;
+  // Deleted books stay in the database for 30 days ("Recently deleted"), hidden from everything else
+  S.books = books.data.filter(b => !b.deleted_at);
+  S.deletedBooks = books.data.filter(b => b.deleted_at);
+  const live = new Set(S.books.map(b => b.id));
+  S._quotesAll = quotes.data;
+  S.quotes = quotes.data.filter(q => live.has(q.book_id));
+  S._ratingsAll = ratings.data.map(r => ({ ...r, score: +r.score }));
+  S.ratings = S._ratingsAll.filter(r => live.has(r.book_id));
 }
 async function refresh(){
   try { await loadAll(); status(""); render(); }
@@ -717,7 +734,8 @@ function bookForm(existing){
       <div class="field"><label>Time</label><input type="time" id="fTime" value="${esc(b.meet_time)}"></div>
     </div>
     <div class="field"><label>Location</label><input id="fLoc" maxlength="100" placeholder="e.g. Sarah's house" value="${esc(b.location)}"></div>
-    <div class="actions"><button class="btn" id="fSave">${existing ? "Save changes" : "Add book"}</button><button class="btn alt" data-close>Cancel</button></div>`);
+    <div class="actions"><button class="btn" id="fSave">${existing ? "Save changes" : "Add book"}</button><button class="btn alt" data-close>Cancel</button></div>
+    ${existing ? `<div style="margin-top:26px;border-top:1px solid var(--line);padding-top:8px"><button class="btn danger-link" id="fDel" type="button">🗑 Delete this book</button></div>` : ""}`);
   const el = m.el, f = id => el.querySelector(id);
   const drawPv = () => { f("#pv").innerHTML = coverHTML({ cover, title: f("#fTitle").value || "Title", author: f("#fAuthor").value }); f("#rmCover").classList.toggle("hidden", !cover); };
   drawPv(); f("#fTitle").addEventListener("input", drawPv);
@@ -765,6 +783,34 @@ function bookForm(existing){
     }, existing ? "Saved ✓" : "Book added 📚");
     if (ok){ await m.close(); if (newId) openBook(newId); } else { f("#fSave").disabled = false; f("#fSave").textContent = "Try again"; }
   };
+  if (existing) f("#fDel").onclick = async () => { if (await deleteBook(b)) m.close(); };
+}
+
+/* =====================================================================
+   DELETE (soft), UNDO and "RECENTLY DELETED"
+   A deleted book is only hidden: it keeps its scores and quotes and can be
+   restored for 30 days. Supabase removes it for good after that (nightly job).
+   ===================================================================== */
+async function deleteBook(b){
+  if (!(await confirmBox(`Delete “${b.title}”? You can undo this straight away, or restore it from Settings → Recently deleted for 30 days.`))) return false;
+  const ok = await write(() => sb.from("books").update({ deleted_at: new Date().toISOString() }).eq("id", b.id));
+  if (ok) toastAction(`“${b.title}” deleted`, "Undo", () => restoreBook(b.id));
+  return ok;
+}
+const restoreBook = id => write(() => sb.from("books").update({ deleted_at: null }).eq("id", id), "Book restored ✓");
+function openBin(){
+  const list = [...S.deletedBooks].sort((a, b) => b.deleted_at.localeCompare(a.deleted_at));
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const m = openModal(`<div class="sheet-head"><h2>Recently deleted</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <p class="small" style="margin:0 0 12px">Deleted books wait here for 30 days with their scores and quotes, then they're removed for good.</p>
+    ${list.length ? `<div class="rlist">${list.map(b => {
+      const left = Math.max(0, 30 - Math.floor((Date.now() - new Date(b.deleted_at)) / 864e5));
+      const nR = S._ratingsAll.filter(r => r.book_id === b.id).length, nQ = S._quotesAll.filter(q => q.book_id === b.id).length;
+      return `<div class="ritem"><span class="nm">${esc(b.title)}<div class="small">${esc(b.author || "")}${b.author ? " · " : ""}${plural(nR, "score")}, ${plural(nQ, "quote")} · ${plural(left, "day")} left</div></span>
+        <button class="btn green" data-restore="${b.id}" style="padding:8px 12px">Restore</button></div>`; }).join("")}</div>`
+      : `<div class="empty"><div class="e-ico">🗑️</div>Nothing here — no books deleted in the last 30 days.</div>`}`);
+  m.el.onclick = async e => { const r = e.target.closest("[data-restore]"); if (!r) return;
+    r.disabled = true; if (await restoreBook(r.dataset.restore)) m.close(); else r.disabled = false; };
 }
 
 /* =====================================================================
@@ -777,7 +823,7 @@ function openBook(id){
   const meId = member(store.get("bc_me"))?.active ? store.get("bc_me") : activeMembers()[0]?.id;
   sheet = openModal(`
     <div class="sheet-head"><span style="flex:1"></span>
-      <button class="icon-btn" id="bEdit" aria-label="Edit">✏️</button><button class="icon-btn" id="bDel" aria-label="Delete">🗑</button>
+      <button class="icon-btn" id="bEdit" aria-label="Edit">✏️</button>
       <button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div id="bTop"></div><div id="bScore"></div>
     <div class="section"><h3>Scores</h3><div class="rlist" id="bRatings"></div>
@@ -818,9 +864,6 @@ function openBook(id){
   f("#qAdd").onclick = async () => { const text = f("#qText").value.trim(); if (!text) return; store.set("bc_me", f("#qWho").value);
     if (await write(() => sb.from("quotes").insert({ book_id: id, member_id: f("#qWho").value || null, text, page: f("#qPage").value.trim() || null }), "Added 💬")){ f("#qText").value = ""; f("#qPage").value = ""; } };
   f("#bEdit").onclick = async () => { const cur = S.books.find(x => x.id === id); await sheet.close(); bookForm(cur); };
-  f("#bDel").onclick = async () => { const cur = S.books.find(x => x.id === id);
-    if (await confirmBox(`Delete “${cur.title}” and all its scores and quotes? This can't be undone.`))
-      if (await write(() => sb.from("books").delete().eq("id", id), "Book deleted")) sheet?.close(); };
   sheet.el.addEventListener("click", async e => { const d = e.target.closest("[data-qdel]"); if (!d) return;
     if (await confirmBox("Remove this quote?", "Remove")) write(() => sb.from("quotes").delete().eq("id", d.dataset.qdel)); });
   loadMine(); refreshBookSheet();
@@ -869,6 +912,7 @@ $("#renameClub").onclick = () => {
         <div class="view-toggle" role="group" aria-label="Theme">
           <button data-theme-pick="auto">Auto</button><button data-theme-pick="light">Light</button><button data-theme-pick="dark">Dark</button>
         </div></div>
+      <button class="ritem menu-item" id="mBin"><span style="font-size:20px">🗑️</span><span class="nm">Recently deleted<div class="small">${S.deletedBooks.length ? `${S.deletedBooks.length} book${S.deletedBooks.length === 1 ? "" : "s"} — restore within 30 days` : "Restore books deleted in the last 30 days"}</div></span></button>
       <button class="ritem menu-item" id="mExport"><span style="font-size:20px">⬇️</span><span class="nm">Export everything to a spreadsheet<div class="small">Books, everyone's scores and quotes (CSV — opens in Excel, Google Sheets or Numbers)</div></span></button>
     </div>`);
   m.el.querySelector("#mRename").onclick = async () => { await m.close(); const v = await promptBox("Club name", S.club.name); if (v) write(() => sb.from("club").update({ name: v }).eq("id", 1)); };
@@ -878,6 +922,7 @@ $("#renameClub").onclick = () => {
   m.el.querySelectorAll("[data-theme-pick]").forEach(b => b.onclick = () => {
     store.set("bc_theme", b.dataset.themePick); applyTheme(b.dataset.themePick); drawTheme(); });
   drawTheme();
+  m.el.querySelector("#mBin").onclick = async () => { await m.close(); openBin(); };
 };
 
 // Build a spreadsheet (CSV) of the whole log and download it.
